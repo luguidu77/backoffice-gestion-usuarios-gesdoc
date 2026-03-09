@@ -78,10 +78,10 @@
         <!--
             finalName: nombre del jar generado en target/
             Sin este ajuste Maven generaría: backoffice-test-1.0.0-SNAPSHOT.jar
-            Con este ajuste genera:          backoffice-test.jar
-            → Permite arrancar siempre con: java -jar target/backoffice-test.jar
+            Con este ajuste genera:          admin-usuarios.jar
+            → Permite arrancar siempre con: java -jar target/admin-usuarios.jar
         -->
-        <finalName>backoffice-test</finalName>
+        <finalName>admin-usuarios</finalName>
 
         <plugins>
             <!--
@@ -89,7 +89,7 @@
                 Convierte el jar normal en un "fat jar" (uber jar) ejecutable:
                   - Empaqueta todas las dependencias dentro del jar
                   - Añade el launcher de Spring Boot
-                  - El resultado se puede ejecutar con: java -jar target/backoffice-test.jar
+                  - El resultado se puede ejecutar con: java -jar target/admin-usuarios.jar
             -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
