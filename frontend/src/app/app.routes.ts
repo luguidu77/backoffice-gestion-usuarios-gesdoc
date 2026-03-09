@@ -3,7 +3,8 @@
  *
  * Arquitectura de rutas con lazy loading:
  *   /           → redirige a /dashboard
- *   /dashboard  → carga el módulo de dashboard bajo demanda (lazy)
+ *   /login      → página de autenticación
+ *   /dashboard  → carga el módulo de dashboard bajo demanda (lazy) - protegido por authGuard
  *   /**         → cualquier ruta desconocida redirige al dashboard
  *
  * Lazy loading (loadChildren / loadComponent):
@@ -11,6 +12,7 @@
  *   navega a esa ruta → bundles más pequeños → inicio más rápido.
  */
 import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -19,9 +21,16 @@ export const routes: Routes = [
     pathMatch: 'full'
   },
   {
-    // Carga lazy del feature Dashboard
+    // Ruta de login - acceso público
+    path: 'login',
+    loadChildren: () =>
+      import('./features/auth/auth.routes').then(m => m.authRoutes)
+  },
+  {
+    // Carga lazy del feature Dashboard - protegida con authGuard
     // Angular 17: se usa loadChildren con las rutas del feature
     path: 'dashboard',
+    canActivate: [authGuard],
     loadChildren: () =>
       import('./features/dashboard/dashboard.routes').then(m => m.DASHBOARD_ROUTES)
   },

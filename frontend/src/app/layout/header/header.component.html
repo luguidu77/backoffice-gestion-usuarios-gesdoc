@@ -19,5 +19,17 @@
       <!-- Aquí se añadirán más enlaces cuando se creen nuevas features -->
     </nav>
 
+    <!-- Usuario y logout -->
+    <div class="header-user" *ngIf="authService.isAuthenticated()">
+      <span class="user-name">{{ userName }}</span>
+      <button
+        class="btn-logout"
+        (click)="logout()"
+        aria-label="Cerrar sesión"
+        title="Cerrar sesión">
+        Salir
+      </button>
+    </div>
+
   </div>
 </header>

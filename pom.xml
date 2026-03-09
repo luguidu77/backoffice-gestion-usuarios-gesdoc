@@ -69,6 +69,16 @@
             <scope>test</scope>
         </dependency>
 
+        <!--
+            httpclient
+            Apache HttpClient para configuración avanzada de SSL en RestTemplate.
+            Permite aceptar certificados autofirmados en entornos de preproducción.
+        -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+        </dependency>
+
     </dependencies>
 
     <!-- ============================================================

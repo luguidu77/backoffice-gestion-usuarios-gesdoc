@@ -14,6 +14,7 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 
 import { routes } from './app.routes';
 import { httpErrorInterceptor } from './core/interceptors/http-error.interceptor';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -23,8 +24,9 @@ export const appConfig: ApplicationConfig = {
 
     // HttpClient global: disponible en todos los servicios vía inyección de dependencias
     // withInterceptors() registra los interceptores funcionales de Angular 17
+    // Orden: primero authInterceptor (añade ticket), luego httpErrorInterceptor (maneja errores)
     provideHttpClient(
-      withInterceptors([httpErrorInterceptor])
+      withInterceptors([authInterceptor, httpErrorInterceptor])
     ),
 
     // Habilita las animaciones de Angular (necesarias para algunos componentes UI)
