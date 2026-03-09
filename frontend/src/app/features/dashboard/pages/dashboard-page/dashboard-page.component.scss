@@ -1,0 +1,169 @@
+.dashboard {
+  padding: 8px 0 32px;
+}
+
+/* --- Cabecera de la página --- */
+.dashboard-header {
+  margin-bottom: 28px;
+}
+
+.dashboard-title {
+  font-size: 1.8rem;
+  color: var(--color-primary);
+  margin-bottom: 4px;
+}
+
+.dashboard-subtitle {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* --- Grid de tarjetas --- */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+/* Tarjeta que ocupa toda la fila */
+.card-full {
+  grid-column: 1 / -1;
+}
+
+/* --- Tarjeta --- */
+.card {
+  background: var(--color-white);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background-color: #ebf8ff;
+  border-bottom: 1px solid #bee3f8;
+
+  .card-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+}
+
+.card-body {
+  padding: 20px 24px 24px;
+  flex: 1;
+}
+
+/* --- Estado del ping --- */
+.status-label {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+
+  code {
+    background: #edf2f7;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+  }
+}
+
+/* --- Badges --- */
+.badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+
+  &-success {
+    background: #c6f6d5;
+    color: #22543d;
+  }
+
+  &-error {
+    background: #fed7d7;
+    color: #742a2a;
+  }
+}
+
+/* --- Botón actualizar --- */
+.btn-refresh {
+  display: block;
+  margin-top: 16px;
+  padding: 8px 18px;
+  background: var(--color-primary-light);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color var(--transition);
+
+  &:hover:not(:disabled) {
+    background: var(--color-primary);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+/* --- Listas --- */
+.info-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  li {
+    font-size: 0.92rem;
+    color: var(--color-text);
+
+    a {
+      color: var(--color-primary-light);
+      font-size: 0.88rem;
+    }
+  }
+}
+
+.roadmap-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  li {
+    padding: 8px 12px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.93rem;
+
+    &.done {
+      color: #276749;
+      background: #f0fff4;
+    }
+
+    &.pending {
+      color: #4a5568;
+      background: #f7fafc;
+    }
+  }
+}

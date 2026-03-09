@@ -1,0 +1,23 @@
+# ============================================================
+# .gitignore específico para el directorio frontend/
+# ============================================================
+
+# Dependencias de Node.js (se instalan con npm install)
+node_modules/
+
+# Compilados de Angular
+dist/
+
+# Caché del CLI de Angular
+.angular/
+
+# Compilados de TypeScript
+out-tsc/
+
+# Logs de npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tests de karma
+coverage/

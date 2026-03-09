@@ -1,0 +1,12 @@
+{
+  "/ping": {
+    "target": "http://localhost:8085",
+    "secure": false,
+    "logLevel": "debug"
+  },
+  "/api": {
+    "target": "http://localhost:8085",
+    "secure": false,
+    "logLevel": "debug"
+  }
+}

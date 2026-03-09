@@ -1,0 +1,80 @@
+<div class="dashboard">
+
+  <header class="dashboard-header">
+    <h1 class="dashboard-title">Dashboard</h1>
+    <p class="dashboard-subtitle">Panel de control del Backoffice &mdash; entorno de prueba</p>
+  </header>
+
+  <div class="cards-grid">
+
+    <!-- ============================================================
+         TARJETA 1: Estado del backend Spring Boot
+         ============================================================ -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon" aria-hidden="true">&#128279;</span>
+        <h2>Estado del Backend</h2>
+      </div>
+      <div class="card-body">
+        <p class="status-label">Respuesta de <code>GET /ping</code>:</p>
+
+        <!-- Sintaxis @if / @else de Angular 17 (nueva control flow API) -->
+        @if (pingLoading()) {
+          <app-loading-spinner />
+        } @else if (pingError()) {
+          <span class="badge badge-error">&#10005; {{ pingStatus() }}</span>
+        } @else {
+          <span class="badge badge-success">&#10003; {{ pingStatus() }}</span>
+        }
+
+        <button
+          class="btn-refresh"
+          (click)="checkPing()"
+          [disabled]="pingLoading()"
+          aria-label="Volver a comprobar el estado del backend">
+          &#8635; Actualizar
+        </button>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         TARJETA 2: Información del entorno
+         ============================================================ -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon" aria-hidden="true">&#128295;</span>
+        <h2>Información del Entorno</h2>
+      </div>
+      <div class="card-body">
+        <ul class="info-list">
+          <li><strong>Backend:</strong> Spring Boot 2.7 · Java 8 · Puerto 8085</li>
+          <li><strong>Frontend:</strong> Angular 17 · Standalone · Puerto 4200</li>
+          <li><strong>API ping:</strong> <a href="http://localhost:8085/ping" target="_blank">http://localhost:8085/ping</a></li>
+          <li><strong>Home backend:</strong> <a href="http://localhost:8085" target="_blank">http://localhost:8085</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         TARJETA 3: Roadmap / Próximos pasos
+         ============================================================ -->
+    <div class="card card-full">
+      <div class="card-header">
+        <span class="card-icon" aria-hidden="true">&#128203;</span>
+        <h2>Próximos pasos</h2>
+      </div>
+      <div class="card-body">
+        <ul class="roadmap-list">
+          <li class="done">&#9989; Backend Java 8 arrancado en la MV</li>
+          <li class="done">&#9989; Frontend Angular 17 con arquitectura standalone</li>
+          <li class="done">&#9989; Comunicación frontend &#8596; backend funcionando</li>
+          <li class="pending">&#11036; Configurar cliente Alfresco (CMIS o API REST)</li>
+          <li class="pending">&#11036; Implementar pantalla de login + autenticación</li>
+          <li class="pending">&#11036; Gestión de usuarios (listado, creación, edición)</li>
+          <li class="pending">&#11036; Gestión de documentos con Alfresco</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>

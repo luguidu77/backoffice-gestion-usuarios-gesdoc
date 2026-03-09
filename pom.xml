@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        PARENT: Spring Boot 2.7.18
+        - Es la última release de la línea 2.7.x
+        - Spring Boot 3.x requiere Java 17 mínimo → NO usar con Java 8
+        - 2.7.x incluye Tomcat 9.x embebido, Spring MVC 5.x y es 100% Java 8 compatible
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.18</version>
+        <relativePath/>
+    </parent>
+
+    <!-- ============================================================
+         IDENTIFICADORES DEL PROYECTO
+         groupId    : dominio invertido de la organización
+         artifactId : nombre del proyecto (= nombre del jar)
+         version    : versión del artefacto
+    ============================================================ -->
+    <groupId>es.dggc.backoffice</groupId>
+    <artifactId>backoffice-test</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Backoffice Test</name>
+    <description>Prueba mínima de backoffice para validar entorno Java 8</description>
+
+    <!-- ============================================================
+         PROPIEDADES: compatibilidad con Java 8
+         java.version = 1.8 le indica a Maven que compile para Java 8
+    ============================================================ -->
+    <properties>
+        <java.version>1.8</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    </properties>
+
+    <!-- ============================================================
+         DEPENDENCIAS
+    ============================================================ -->
+    <dependencies>
+
+        <!--
+            spring-boot-starter-web
+            Incluye de forma automática:
+              - Spring MVC (controladores REST y web)
+              - Tomcat embebido (no hace falta instalar ningún servidor externo)
+              - Jackson (convierte objetos Java a JSON y viceversa)
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+            spring-boot-starter-test
+            Incluye JUnit 5, Mockito y Spring Test.
+            scope=test: solo se usa en las pruebas, no entra en el jar final.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- ============================================================
+         BUILD
+    ============================================================ -->
+    <build>
+        <!--
+            finalName: nombre del jar generado en target/
+            Sin este ajuste Maven generaría: backoffice-test-1.0.0-SNAPSHOT.jar
+            Con este ajuste genera:          backoffice-test.jar
+            → Permite arrancar siempre con: java -jar target/backoffice-test.jar
+        -->
+        <finalName>backoffice-test</finalName>
+
+        <plugins>
+            <!--
+                spring-boot-maven-plugin
+                Convierte el jar normal en un "fat jar" (uber jar) ejecutable:
+                  - Empaqueta todas las dependencias dentro del jar
+                  - Añade el launcher de Spring Boot
+                  - El resultado se puede ejecutar con: java -jar target/backoffice-test.jar
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
