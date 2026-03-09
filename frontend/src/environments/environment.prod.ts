@@ -12,7 +12,7 @@ export const environment = {
   production: true,
 
   // En producción, el frontend y el backend viven en el mismo origen
-  apiUrl: '',
+  apiUrl: '/api',
 
   backendUrl: ''
 };

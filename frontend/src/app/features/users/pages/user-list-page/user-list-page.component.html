@@ -1,0 +1,74 @@
+<div class="user-list-container">
+  <div class="page-header">
+    <h1>Gestión de Usuarios</h1>
+    <div class="header-actions">
+      <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
+        <span class="icon">🔄</span>
+        Actualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading spinner -->
+  <div *ngIf="loading()" class="loading-container">
+    <div class="spinner"></div>
+    <p>Cargando usuarios...</p>
+  </div>
+
+  <!-- Error message -->
+  <div *ngIf="error() && !loading()" class="error-message">
+    <span class="icon">⚠️</span>
+    {{ error() }}
+    <button class="btn-retry" (click)="refresh()">Reintentar</button>
+  </div>
+
+  <!-- User list -->
+  <div *ngIf="!loading() && !error()" class="users-content">
+    <!-- Summary -->
+    <div class="summary">
+      <p>
+        <strong>Total de usuarios:</strong> {{ totalUsers() }}
+        <span *ngIf="hasMore()" class="more-indicator">(hay más usuarios disponibles)</span>
+      </p>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <table class="users-table" *ngIf="users().length > 0">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Correo Electrónico</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let user of users()" [class.inactive-row]="!user.enabled">
+            <td class="id-column">{{ user.id }}</td>
+            <td class="name-column">{{ getFullName(user) }}</td>
+            <td class="email-column">{{ user.email || '-' }}</td>
+            <td class="status-column">
+              <span class="status-badge" [ngClass]="getStatusClass(user.enabled)">
+                {{ getStatusText(user.enabled) }}
+              </span>
+            </td>
+            <td class="actions-column">
+              <button class="btn-action btn-view" (click)="viewUser(user.id)" title="Ver detalles">
+                👁️
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Empty state -->
+      <div *ngIf="users().length === 0" class="empty-state">
+        <div class="empty-icon">👥</div>
+        <h3>No hay usuarios disponibles</h3>
+        <p>No se encontraron usuarios en el sistema.</p>
+      </div>
+    </div>
+  </div>
+</div>

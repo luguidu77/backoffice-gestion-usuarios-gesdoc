@@ -12,8 +12,8 @@ export const environment = {
   production: false,
 
   // URL base para las llamadas a la API del backend.
-  // Vacío → usa rutas relativas + proxy (ver proxy.conf.json)
-  apiUrl: '',
+  // En desarrollo usa rutas relativas + proxy (ver proxy.conf.json)
+  apiUrl: '/api',
 
   // URL del backend. Útil si algún servicio necesita construir URLs absolutas.
   backendUrl: 'http://localhost:8085'

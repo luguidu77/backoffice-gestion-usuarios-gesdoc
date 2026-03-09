@@ -5,6 +5,7 @@
  *   /           → redirige a /dashboard
  *   /login      → página de autenticación
  *   /dashboard  → carga el módulo de dashboard bajo demanda (lazy) - protegido por authGuard
+ *   /users      → gestión de usuarios de Alfresco - protegido por authGuard
  *   /**         → cualquier ruta desconocida redirige al dashboard
  *
  * Lazy loading (loadChildren / loadComponent):
@@ -33,6 +34,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadChildren: () =>
       import('./features/dashboard/dashboard.routes').then(m => m.DASHBOARD_ROUTES)
+  },
+  {
+    // Gestión de usuarios - protegida con authGuard
+    path: 'users',
+    loadChildren: () =>
+      import('./features/users/users.routes').then(m => m.usersRoutes)
   },
   {
     // Wildcard: ruta no encontrada → redirige al dashboard
