@@ -1,12 +1,33 @@
 <div class="user-list-container">
   <div class="page-header">
     <h1>Gestión de Usuarios</h1>
-    <div class="header-actions">
-      <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
-        <span class="icon">🔄</span>
-        Actualizar
-      </button>
+    <!-- Search and Actions -->
+    <div class="actions-bar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" [(ngModel)]="searchTerm" (keyup.enter)="onSearch()"
+          placeholder="Buscar usuarios por ID, nombre o email...">
+        <button class="btn-search" (click)="onSearch()">Buscar</button>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
+          <span class="icon">🔄</span>
+          Actualizar
+        </button>
+      </div>
     </div>
+  </div>
+
+  <!-- Active Filters -->
+  <div *ngIf="siteId() || searchTerm()" class="active-filters">
+    <div class="filter-chip" *ngIf="siteId()">
+      <span>Filtrado por sitio: <strong>{{ siteId() }}</strong></span>
+    </div>
+    <div class="filter-chip" *ngIf="searchTerm()">
+      <span>Buscando: <strong>"{{ searchTerm() }}"</strong></span>
+    </div>
+    <button class="btn-clear" (click)='clearFilters()'>Limpiar filtros</button>
   </div>
 
   <!-- Loading spinner -->
@@ -27,7 +48,9 @@
     <!-- Summary -->
     <div class="summary">
       <p>
-        <strong>Total de usuarios:</strong> {{ totalUsers() }}
+        <strong>Total de usuarios:</strong>
+        <span [class.filtered-count]="siteId() || searchTerm()">{{ totalUsers() }}</span>
+        <span *ngIf="siteId() || searchTerm()" class="filter-info"> (encontrados con filtros)</span>
         <span *ngIf="hasMore()" class="more-indicator">(hay más usuarios disponibles)</span>
       </p>
     </div>

@@ -1,14 +1,16 @@
-<!-- Layout global de la aplicación -->
+<!-- Layout global de la aplicación con Sidebar Retráctil -->
+<div class="app-container">
+  <!-- Menú lateral retractil -->
+  <app-sidebar></app-sidebar>
 
-<!-- Cabecera: barra de navegación siempre visible -->
-<app-header />
+  <!-- Contenedor Derecho (Contenido + Footer) -->
+  <div class="main-wrapper">
+    <!-- Área de contenido principal -->
+    <main class="main-content">
+      <router-outlet></router-outlet>
+    </main>
 
-<!-- Área de contenido principal -->
-<!-- router-outlet: Angular reemplaza este tag con el componente
-     correspondiente a la ruta activa en app.routes.ts -->
-<main class="main-content">
-  <router-outlet />
-</main>
-
-<!-- Pie de página -->
-<app-footer />
+    <!-- Pie de página -->
+    <app-footer></app-footer>
+  </div>
+</div>

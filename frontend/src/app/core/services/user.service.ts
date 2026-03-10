@@ -10,19 +10,34 @@ import { environment } from '../../../environments/environment';
 export class UserService {
   private apiUrl = `${environment.apiUrl}/users`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   /**
    * Obtiene la lista de usuarios de Alfresco.
    * 
    * @param maxItems Número máximo de usuarios a obtener
    * @param skipCount Número de usuarios a omitir (para paginación)
+   * @param siteId ID del sitio por el que filtrar (opcional)
+   * @param searchTerm Término de búsqueda (opcional)
    * @returns Observable con la lista de usuarios
    */
-  getUsers(maxItems: number = 100, skipCount: number = 0): Observable<UserListResponse> {
-    const params = new HttpParams()
+  getUsers(
+    maxItems: number = 100,
+    skipCount: number = 0,
+    siteId?: string,
+    searchTerm?: string
+  ): Observable<UserListResponse> {
+    let params = new HttpParams()
       .set('maxItems', maxItems.toString())
       .set('skipCount', skipCount.toString());
+
+    if (siteId) {
+      params = params.set('siteId', siteId);
+    }
+
+    if (searchTerm) {
+      params = params.set('searchTerm', searchTerm);
+    }
 
     return this.http.get<UserListResponse>(this.apiUrl, { params });
   }

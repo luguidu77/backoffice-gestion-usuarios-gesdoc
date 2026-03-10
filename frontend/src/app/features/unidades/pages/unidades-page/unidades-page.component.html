@@ -1,0 +1,75 @@
+<div class="sites-list-container">
+    <div class="page-header">
+        <h1>Unidades (Sitios)</h1>
+        <div class="header-actions">
+            <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
+                <span class="icon">🔄</span>
+                Actualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading spinner -->
+    <div *ngIf="loading()" class="loading-container">
+        <div class="spinner"></div>
+        <p>Cargando sitios...</p>
+    </div>
+
+    <!-- Error message -->
+    <div *ngIf="error() && !loading()" class="error-message">
+        <span class="icon">⚠️</span>
+        {{ error() }}
+        <button class="btn-retry" (click)="refresh()">Reintentar</button>
+    </div>
+
+    <!-- Sites list -->
+    <div *ngIf="!loading() && !error()" class="sites-content">
+        <!-- Summary -->
+        <div class="summary">
+            <p>
+                <strong>Total de sitios:</strong> {{ totalSites() }}
+                <span *ngIf="hasMore()" class="more-indicator">(hay más sitios disponibles)</span>
+            </p>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container">
+            <table class="sites-table" *ngIf="sites().length > 0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Título</th>
+                        <th>Descripción</th>
+                        <th>Visibilidad</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let site of sites()" (click)="viewMembers(site.id)" class="site-row"
+                        title="Ver miembros de este sitio">
+                        <td class="id-column">{{ site.id }}</td>
+                        <td class="title-column">{{ site.title || site.id }}</td>
+                        <td class="description-column">{{ site.description || '-' }}</td>
+                        <td class="visibility-column">
+                            <span class="visibility-badge" [ngClass]="getVisibilityClass(site.visibility)">
+                                {{ getVisibilityLabel(site.visibility) }}
+                            </span>
+                        </td>
+                        <td class="actions-column">
+                            <button class="btn-action btn-view-members" title="Ver miembros">
+                                👥
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Empty state -->
+            <div *ngIf="sites().length === 0" class="empty-state">
+                <div class="empty-icon">🏢</div>
+                <h3>No hay sitios disponibles</h3>
+                <p>No se encontraron sitios en el sistema.</p>
+            </div>
+        </div>
+    </div>
+</div>

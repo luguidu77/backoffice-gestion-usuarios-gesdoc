@@ -1,13 +1,14 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { UserService } from '../../../../core/services/user.service';
 import { User } from '../../../../core/models/user.model';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-user-list-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './user-list-page.component.html',
   styleUrls: ['./user-list-page.component.scss']
 })
@@ -18,13 +19,27 @@ export class UserListPageComponent implements OnInit {
   totalUsers = signal<number>(0);
   hasMore = signal<boolean>(false);
 
+  // Filtros
+  searchTerm = signal<string>('');
+  siteId = signal<string | null>(null);
+
   constructor(
     private userService: UserService,
-    private router: Router
-  ) {}
+    private router: Router,
+    private route: ActivatedRoute
+  ) { }
 
   ngOnInit(): void {
-    this.loadUsers();
+    // Escuchar cambios en los queryParams (para filtrado por sitio)
+    this.route.queryParams.subscribe(params => {
+      const siteId = params['siteId'];
+      if (siteId) {
+        this.siteId.set(siteId);
+      } else {
+        this.siteId.set(null);
+      }
+      this.loadUsers();
+    });
   }
 
   /**
@@ -34,7 +49,7 @@ export class UserListPageComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
 
-    this.userService.getUsers(100, 0).subscribe({
+    this.userService.getUsers(100, 0, this.siteId() || undefined, this.searchTerm()).subscribe({
       next: (response) => {
         this.users.set(response.users);
         this.totalUsers.set(response.totalUsers);
@@ -47,6 +62,30 @@ export class UserListPageComponent implements OnInit {
         this.loading.set(false);
       }
     });
+  }
+
+  /**
+   * Ejecuta la búsqueda de usuarios.
+   */
+  onSearch(): void {
+    this.loadUsers();
+  }
+
+  /**
+   * Limpia todos los filtros activos.
+   */
+  clearFilters(): void {
+    this.searchTerm.set('');
+    if (this.siteId()) {
+      // Si hay siteId, quitarlo de la URL
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { siteId: null },
+        queryParamsHandling: 'merge'
+      });
+    } else {
+      this.loadUsers();
+    }
   }
 
   /**

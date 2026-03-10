@@ -42,6 +42,13 @@ export const routes: Routes = [
       import('./features/users/users.routes').then(m => m.usersRoutes)
   },
   {
+    // Unidades (Sitios Alfresco) - protegida con authGuard
+    path: 'unidades',
+    canActivate: [authGuard],
+    loadChildren: () =>
+      import('./features/unidades/unidades.routes').then(m => m.unidadesRoutes)
+  },
+  {
     // Wildcard: ruta no encontrada → redirige al dashboard
     path: '**',
     redirectTo: 'dashboard'

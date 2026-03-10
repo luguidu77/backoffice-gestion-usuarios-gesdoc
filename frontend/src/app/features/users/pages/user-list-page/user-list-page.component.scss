@@ -19,6 +19,67 @@
   }
 }
 
+.actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+  justify-content: flex-end;
+  max-width: 600px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus-within {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+
+  .search-icon {
+    font-size: 1.1rem;
+    margin-right: 0.75rem;
+    color: #888;
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 1rem;
+    color: #333;
+    background: transparent;
+
+    &::placeholder {
+      color: #aaa;
+    }
+  }
+
+  .btn-search {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 0.5rem 1.25rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    margin-left: 0.5rem;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background: #0056b3;
+    }
+  }
+}
+
 .header-actions {
   display: flex;
   gap: 1rem;
@@ -52,6 +113,41 @@
   }
 }
 
+.active-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+
+  .filter-chip {
+    background: #e7f3ff;
+    color: #0056b3;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    border: 1px solid #b8daff;
+
+    strong {
+      color: #004085;
+    }
+  }
+
+  .btn-clear {
+    background: none;
+    border: none;
+    color: #dc3545;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.25rem 0.5rem;
+
+    &:hover {
+      color: #a71d2a;
+    }
+  }
+}
+
 .loading-container {
   display: flex;
   flex-direction: column;
@@ -76,8 +172,13 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .error-message {
@@ -132,6 +233,16 @@
       color: #6c757d;
       font-style: italic;
       margin-left: 0.5rem;
+    }
+
+    .filtered-count {
+      color: #007bff;
+      font-size: 1.2rem;
+    }
+
+    .filter-info {
+      color: #6c757d;
+      font-size: 0.9rem;
     }
   }
 }
@@ -275,7 +386,8 @@
   .users-table {
     font-size: 0.9rem;
 
-    th, td {
+    th,
+    td {
       padding: 0.75rem 0.5rem;
     }
   }

@@ -5,11 +5,33 @@
   min-height: 100vh;
 }
 
-/* El contenido principal ocupa todo el espacio vertical disponible */
-.main-content {
+/*
+  Estilos del contenedor principal.
+  Se usa un Flexbox de izquierda a derecha para colocar el sidebar al lado del contenido.
+*/
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/*
+  Envoltorio de contenido que ocupará el resto del espacio
+*/
+.main-wrapper {
+  display: flex;
+  flex-direction: column;
   flex: 1;
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
+  min-width: 0;
+  /* Para evitar desbordamientos en flex */
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: var(--color-bg);
+}
+
+.main-content {
+  flex: 1 0 auto;
+  /* Ocupa el espacio disponible empujando el footer abajo */
+  padding: 32px 24px;
 }
