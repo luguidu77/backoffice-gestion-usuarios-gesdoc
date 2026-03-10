@@ -37,16 +37,16 @@
             <table class="sites-table" *ngIf="sites().length > 0">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Título</th>
-                        <th>Descripción</th>
+                        <th>TIP</th>
+                        <th>Nº DIR3</th>
+                        <th>UNIDAD</th>
                         <th>Visibilidad</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr *ngFor="let site of sites()" (click)="viewMembers(site.id)" class="site-row"
-                        title="Ver miembros de este sitio">
+                    <tr *ngFor="let site of sites()" (click)="viewMembers(site.id, site.description || site.title)"
+                        class="site-row" title="Ver miembros de este sitio">
                         <td class="id-column">{{ site.id }}</td>
                         <td class="title-column">{{ site.title || site.id }}</td>
                         <td class="description-column">{{ site.description || '-' }}</td>

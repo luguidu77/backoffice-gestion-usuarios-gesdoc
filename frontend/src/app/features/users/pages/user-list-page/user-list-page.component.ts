@@ -22,6 +22,7 @@ export class UserListPageComponent implements OnInit {
   // Filtros
   searchTerm = signal<string>('');
   siteId = signal<string | null>(null);
+  siteName = signal<string | null>(null);
 
   constructor(
     private userService: UserService,
@@ -33,10 +34,13 @@ export class UserListPageComponent implements OnInit {
     // Escuchar cambios en los queryParams (para filtrado por sitio)
     this.route.queryParams.subscribe(params => {
       const siteId = params['siteId'];
+      const siteName = params['siteName'];
       if (siteId) {
         this.siteId.set(siteId);
+        this.siteName.set(siteName || siteId);
       } else {
         this.siteId.set(null);
+        this.siteName.set(null);
       }
       this.loadUsers();
     });
@@ -80,7 +84,7 @@ export class UserListPageComponent implements OnInit {
       // Si hay siteId, quitarlo de la URL
       this.router.navigate([], {
         relativeTo: this.route,
-        queryParams: { siteId: null },
+        queryParams: { siteId: null, siteName: null },
         queryParamsHandling: 'merge'
       });
     } else {

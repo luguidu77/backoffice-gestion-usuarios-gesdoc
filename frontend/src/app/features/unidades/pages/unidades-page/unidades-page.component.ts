@@ -76,8 +76,8 @@ export class UnidadesPageComponent implements OnInit {
   /**
    * Navega a la gestión de usuarios filtrando por este sitio.
    */
-  viewMembers(siteId: string): void {
-    this.router.navigate(['/users'], { queryParams: { siteId } });
+  viewMembers(siteId: string, siteName?: string): void {
+    this.router.navigate(['/users'], { queryParams: { siteId, siteName } });
   }
 
   /**

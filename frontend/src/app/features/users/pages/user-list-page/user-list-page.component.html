@@ -6,7 +6,7 @@
       <div class="search-box">
         <span class="search-icon">🔍</span>
         <input type="text" [(ngModel)]="searchTerm" (keyup.enter)="onSearch()"
-          placeholder="Buscar usuarios por ID, nombre o email...">
+          placeholder="Buscar usuarios por TIP, nombre o email...">
         <button class="btn-search" (click)="onSearch()">Buscar</button>
       </div>
 
@@ -22,7 +22,7 @@
   <!-- Active Filters -->
   <div *ngIf="siteId() || searchTerm()" class="active-filters">
     <div class="filter-chip" *ngIf="siteId()">
-      <span>Filtrado por sitio: <strong>{{ siteId() }}</strong></span>
+      <span>Filtrado por: <strong>{{ siteName() || siteId() }}</strong></span>
     </div>
     <div class="filter-chip" *ngIf="searchTerm()">
       <span>Buscando: <strong>"{{ searchTerm() }}"</strong></span>
@@ -60,7 +60,7 @@
       <table class="users-table" *ngIf="users().length > 0">
         <thead>
           <tr>
-            <th>ID</th>
+            <th>TIP</th>
             <th>Nombre</th>
             <th>Correo Electrónico</th>
             <th>Estado</th>
