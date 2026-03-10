@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # Script de compilación rápida (sin comprimir)
 # Solo compila y prepara el JAR
 # ============================================================
@@ -16,10 +16,8 @@ Copy-Item -Recurse -Force ".\frontend\dist\frontend\browser\*" ".\src\main\resou
 Write-Host "Compilando JAR..." -ForegroundColor Yellow
 mvn clean package -DskipTests
 
-Write-Host ""
 Write-Host "✓ Compilacion completa" -ForegroundColor Green
 Write-Host "JAR generado: .\target\admin-usuarios.jar" -ForegroundColor Cyan
-Write-Host ""
 Write-Host "Para ejecutar:" -ForegroundColor White
 Write-Host "  java -jar target\admin-usuarios.jar" -ForegroundColor Gray
 Write-Host "  O: mvn spring-boot:run" -ForegroundColor Gray
