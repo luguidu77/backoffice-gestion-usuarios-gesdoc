@@ -32,6 +32,12 @@ export class SidebarComponent {
     return first + last;
   }
 
+  /** Verdadero si el usuario tiene rol GLOBAL_ADMIN. */
+  get isGlobalAdmin(): boolean {
+    const user = this.authService.getUserData();
+    return user?.isGlobalAdmin === true;
+  }
+
   toggleSidebar() {
     this.isCollapsed = !this.isCollapsed;
   }

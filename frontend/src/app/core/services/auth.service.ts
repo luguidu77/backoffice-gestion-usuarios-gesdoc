@@ -14,6 +14,7 @@ export interface LoginResponse {
   lastName?: string;
   email?: string;
   message?: string;
+  groups?: string[];
 }
 
 /**
@@ -48,7 +49,7 @@ export class AuthService {
   constructor(
     private http: HttpClient,
     private router: Router
-  ) {}
+  ) { }
 
   /**
    * Inicia sesión con las credenciales proporcionadas.
@@ -76,7 +77,7 @@ export class AuthService {
    */
   logout(): Observable<any> {
     const ticket = this.getTicket();
-    
+
     if (!ticket) {
       this.clearSession();
       return new Observable(observer => {
@@ -143,11 +144,18 @@ export class AuthService {
    * Guarda los datos del usuario en localStorage.
    */
   private saveUserData(data: LoginResponse): void {
+    const isAdmin = data.groups?.includes('GROUP_ALFRESCO_ADMINISTRATORS') || false;
+    // Base role logic. If not global admin, we assume standard unit admin until they access a specific view
+    const derivedRole = isAdmin ? 'GLOBAL_ADMIN' : 'UNIT_ADMIN';
+
     const userData = {
       username: data.username,
       firstName: data.firstName,
       lastName: data.lastName,
-      email: data.email
+      email: data.email,
+      groups: data.groups || [],
+      isGlobalAdmin: isAdmin,
+      role: derivedRole
     };
     localStorage.setItem(this.USER_KEY, JSON.stringify(userData));
   }

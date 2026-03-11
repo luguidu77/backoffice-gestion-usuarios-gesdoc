@@ -1,6 +1,7 @@
 package es.dggc.backoffice.controller;
 
 import es.dggc.backoffice.model.dto.UserListResponse;
+import es.dggc.backoffice.model.dto.GroupListResponse;
 import es.dggc.backoffice.service.AlfrescoUserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,5 +110,35 @@ public class UserController {
         // TODO: Implementar obtención de usuario individual
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                 .body("Endpoint no implementado aún");
+    }
+
+    /**
+     * Endpoint para obtener los grupos a los que pertenece un usuario.
+     * 
+     * GET /api/users/{userId}/groups
+     * Header: Authorization: Basic {token}
+     * 
+     * @param authHeader Header de autorización
+     * @param userId     ID del usuario
+     * @return GroupListResponse con la lista de grupos
+     */
+    @GetMapping("/{userId}/groups")
+    public ResponseEntity<GroupListResponse> getUserGroups(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId) {
+        log.info("Solicitud de grupos para usuario: {}", userId);
+
+        // Validar header de autorización
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            log.warn("Solicitud sin header de autorización válido");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new GroupListResponse());
+        }
+
+        // Extraer token
+        String token = authHeader.substring(6);
+
+        GroupListResponse response = alfrescoUserService.getPersonGroups(token, userId);
+        return ResponseEntity.ok(response);
     }
 }

@@ -1,0 +1,62 @@
+<!-- Overlay backkground -->
+<div class="drawer-overlay" [class.open]="isOpen" (click)="onClose()"></div>
+
+<!-- User Drawer Panel -->
+<div class="drawer-panel" [class.open]="isOpen">
+    <div class="drawer-header">
+        <div class="user-info-mini">
+            <div class="avatar">{{ user?.firstName?.charAt(0) || 'U' }}</div>
+            <div>
+                <h3>{{ getFullName() }}</h3>
+                <span class="user-id">TIP: {{ user?.id }}</span>
+            </div>
+        </div>
+        <button class="btn-close" (click)="onClose()">✖</button>
+    </div>
+
+    <div class="drawer-content" *ngIf="user">
+        <!-- Resumen -->
+        <section class="info-section">
+            <h4>Detalles de la Cuenta</h4>
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>Email</label>
+                    <span>{{ user.email || 'No proporcionado' }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Estado</label>
+                    <span class="status-badge" [class.active]="user.enabled" [class.inactive]="!user.enabled">
+                        {{ user.enabled ? 'Activo' : 'Inactivo' }}
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sitios/Unidades -->
+        <section class="info-section">
+            <h4>Unidades y Permisos Asociados</h4>
+            <p class="placeholder-text">Próximamente: listado de roles (Manager, Collaborator...) en cada Unidad mapeado
+                desde Alfresco.</p>
+        </section>
+
+        <!-- Grupos de directorio -->
+        <section class="info-section">
+            <h4>Grupos de Directorio Activo</h4>
+
+            <div *ngIf="loadingGroups()" class="loading-mini">
+                <span class="spinner-small"></span> Cargando grupos...
+            </div>
+
+            <div *ngIf="!loadingGroups() && userGroups().length === 0" class="placeholder-text">
+                El usuario no pertenece a ningún grupo.
+            </div>
+
+            <ul *ngIf="!loadingGroups() && userGroups().length > 0" class="group-list">
+                <li *ngFor="let group of userGroups()">
+                    <span class="group-icon">👥</span>
+                    <span class="group-name">{{ group.displayName || group.id }}</span>
+                </li>
+            </ul>
+        </section>
+    </div>
+</div>

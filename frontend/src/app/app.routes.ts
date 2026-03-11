@@ -14,6 +14,8 @@
  */
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
+import { roleGuard } from './core/guards/role.guard';
+import { AppRole } from './core/models/auth.model';
 
 export const routes: Routes = [
   {
@@ -36,15 +38,18 @@ export const routes: Routes = [
       import('./features/dashboard/dashboard.routes').then(m => m.DASHBOARD_ROUTES)
   },
   {
-    // Gestión de usuarios - protegida con authGuard
+    // Gestión de usuarios - protegida con authGuard y roleGuard
     path: 'users',
+    canActivate: [authGuard, roleGuard],
+    data: { roles: [AppRole.GLOBAL_ADMIN] },
     loadChildren: () =>
       import('./features/users/users.routes').then(m => m.usersRoutes)
   },
   {
     // Unidades (Sitios Alfresco) - protegida con authGuard
     path: 'unidades',
-    canActivate: [authGuard],
+    canActivate: [authGuard, roleGuard],
+    data: { roles: [AppRole.GLOBAL_ADMIN, AppRole.UNIT_ADMIN] },
     loadChildren: () =>
       import('./features/unidades/unidades.routes').then(m => m.unidadesRoutes)
   },

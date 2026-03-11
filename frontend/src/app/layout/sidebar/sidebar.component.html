@@ -24,8 +24,8 @@
             <span class="nav-text" *ngIf="!isCollapsed">Dashboard</span>
         </a>
 
-        <a routerLink="/users" routerLinkActive="active" class="nav-link" aria-label="Gestión de usuarios"
-            title="Usuarios">
+        <a *ngIf="isGlobalAdmin" routerLink="/users" routerLinkActive="active" class="nav-link"
+            aria-label="Gestión de usuarios" title="Usuarios">
             <span class="nav-icon" aria-hidden="true">&#128101;</span> <!-- Icono de grupo -->
             <span class="nav-text" *ngIf="!isCollapsed">Usuarios</span>
         </a>

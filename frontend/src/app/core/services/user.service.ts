@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { User, UserListResponse } from '../models/user.model';
+import { User, UserListResponse, GroupListResponse } from '../models/user.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -50,5 +50,15 @@ export class UserService {
    */
   getUserById(userId: string): Observable<User> {
     return this.http.get<User>(`${this.apiUrl}/${userId}`);
+  }
+
+  /**
+   * Obtiene los grupos a los que pertenece un usuario.
+   * 
+   * @param userId ID del usuario
+   * @returns Observable con la lista de grupos
+   */
+  getUserGroups(userId: string): Observable<GroupListResponse> {
+    return this.http.get<GroupListResponse>(`${this.apiUrl}/${userId}/groups`);
   }
 }

@@ -4,11 +4,12 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { UserService } from '../../../../core/services/user.service';
 import { User } from '../../../../core/models/user.model';
 import { FormsModule } from '@angular/forms';
+import { UserDetailDrawerComponent } from '../../components/user-detail-drawer/user-detail-drawer.component';
 
 @Component({
   selector: 'app-user-list-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, UserDetailDrawerComponent],
   templateUrl: './user-list-page.component.html',
   styleUrls: ['./user-list-page.component.scss']
 })
@@ -23,6 +24,10 @@ export class UserListPageComponent implements OnInit {
   searchTerm = signal<string>('');
   siteId = signal<string | null>(null);
   siteName = signal<string | null>(null);
+
+  // Drawer status
+  selectedUser = signal<User | null>(null);
+  isDrawerOpen = signal<boolean>(false);
 
   constructor(
     private userService: UserService,
@@ -118,9 +123,14 @@ export class UserListPageComponent implements OnInit {
   /**
    * Navega al detalle de un usuario.
    */
-  viewUser(userId: string): void {
-    // TODO: Implementar vista de detalle
-    console.log('Ver usuario:', userId);
+  viewUser(user: User): void {
+    this.selectedUser.set(user);
+    this.isDrawerOpen.set(true);
+  }
+
+  closeUserDrawer(): void {
+    this.isDrawerOpen.set(false);
+    setTimeout(() => this.selectedUser.set(null), 300); // Wait for animation
   }
 
   /**

@@ -36,18 +36,25 @@ public class SiteController {
      * Parámetros opcionales:
      * - maxItems: número máximo de sitios a obtener (por defecto 100)
      * - skipCount: número de sitios a omitir (para paginación, por defecto 0)
+     * - role: rol del usuario (GLOBAL_ADMIN o UNIT_ADMIN)
+     * - userId: username si es UNIT_ADMIN (para buscar sus sitios)
      *
      * @param authHeader Header de autorización (Basic Auth token)
      * @param maxItems   Número máximo de sitios a obtener
      * @param skipCount  Número de sitios a omitir
+     * @param role       Rol del usuario
+     * @param userId     ID del usuario actual
      * @return SiteListResponse con la lista de sitios
      */
     @GetMapping
     public ResponseEntity<SiteListResponse> listSites(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestParam(value = "maxItems", required = false, defaultValue = "100") Integer maxItems,
-            @RequestParam(value = "skipCount", required = false, defaultValue = "0") Integer skipCount) {
-        log.info("Solicitud de listado de sitios (maxItems={}, skipCount={})", maxItems, skipCount);
+            @RequestParam(value = "skipCount", required = false, defaultValue = "0") Integer skipCount,
+            @RequestParam(value = "role", required = false, defaultValue = "GLOBAL_ADMIN") String role,
+            @RequestParam(value = "userId", required = false) String userId) {
+        log.info("Solicitud de listado de sitios (maxItems={}, skipCount={}, role={}, userId={})", maxItems, skipCount,
+                role, userId);
 
         // Validar header de autorización
         if (authHeader == null || !authHeader.startsWith("Basic ")) {
@@ -59,8 +66,15 @@ public class SiteController {
         // Extraer token (quitar "Basic ")
         String token = authHeader.substring(6);
 
-        // Obtener lista de sitios
-        SiteListResponse response = alfrescoSiteService.listSites(token, maxItems, skipCount);
+        // Obtener lista de sitios según el rol
+        SiteListResponse response;
+        if ("UNIT_ADMIN".equals(role) && userId != null && !userId.trim().isEmpty()) {
+            // El UNIT_ADMIN solo ve los sitios a los que pertenece
+            response = alfrescoSiteService.listUserSites(token, userId, maxItems, skipCount);
+        } else {
+            // El GLOBAL_ADMIN ve todos los sitios del repositorio
+            response = alfrescoSiteService.listSites(token, maxItems, skipCount);
+        }
 
         log.info("Listado de sitios: {} sitios devueltos", response.getSites().size());
         return ResponseEntity.ok(response);

@@ -1,6 +1,5 @@
 /**
  * Modelo para la petición de login.
- * Se envía al backend en POST /api/login
  */
 export interface LoginRequest {
   username: string;
@@ -9,7 +8,6 @@ export interface LoginRequest {
 
 /**
  * Modelo para la respuesta de login del backend.
- * Contiene información del usuario autenticado y el ticket para futuras peticiones.
  */
 export interface LoginResponse {
   success: boolean;
@@ -21,11 +19,34 @@ export interface LoginResponse {
 }
 
 /**
- * Modelo del usuario autenticado almacenado en sesión.
+ * Roles de aplicación (nuestro front-end).
+ */
+export enum AppRole {
+  GLOBAL_ADMIN = 'GLOBAL_ADMIN',
+  UNIT_ADMIN = 'UNIT_ADMIN',
+  READ_ONLY = 'READ_ONLY'
+}
+
+/**
+ * Modelo del usuario autenticado almacenado en sesión, con permisos caculados.
  */
 export interface AuthUser {
   username: string;
   displayName: string;
   email: string;
   ticket: string;
+  // Campos derivados para permisos
+  id?: string;
+  role?: AppRole;
+  managedSiteIds?: string[];
+  groups?: string[];
+  isGlobalAdmin?: boolean;
+}
+
+export interface SessionScope {
+  userId: string;
+  isGlobalAdmin: boolean;
+  managedSiteIds: string[]; // Lista de IDs de sitios (Unidades) donde es SiteManager
+  groups: string[]; // Lista de IDs de grupos
+  role: AppRole; // Rol derivado de la lógica de negocio
 }

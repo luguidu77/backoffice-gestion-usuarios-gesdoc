@@ -4,7 +4,10 @@ import es.dggc.backoffice.config.AlfrescoProperties;
 import es.dggc.backoffice.model.dto.AlfrescoPersonResponse;
 import es.dggc.backoffice.model.dto.AlfrescoPeopleListResponse;
 import es.dggc.backoffice.model.dto.AlfrescoSiteMembersListResponse;
+import es.dggc.backoffice.model.dto.AlfrescoGroupListResponse;
 import es.dggc.backoffice.model.dto.UserListResponse;
+import es.dggc.backoffice.model.dto.GroupListResponse;
+import es.dggc.backoffice.model.dto.GroupListResponse.GroupDto;
 import es.dggc.backoffice.model.dto.UserListResponse.UserDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -257,6 +260,51 @@ public class AlfrescoUserService {
         } catch (Exception e) {
             log.error("Error al buscar usuarios con término {}: {}", term, e.getMessage());
             return new UserListResponse(new ArrayList<>(), 0, false);
+        }
+    }
+
+    /**
+     * Obtiene los grupos a los que pertenece un usuario (Detalle completo).
+     */
+    public GroupListResponse getPersonGroups(String basicAuthToken, String userId) {
+        try {
+            log.info("Obteniendo grupos del usuario {}", userId);
+
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/people/" + userId + "/groups?maxItems=1000";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<AlfrescoGroupListResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    AlfrescoGroupListResponse.class);
+
+            if (response.getBody() != null && response.getBody().getList() != null
+                    && response.getBody().getList().getEntries() != null) {
+
+                List<GroupDto> groups = response.getBody().getList().getEntries().stream()
+                        .map(wrapper -> {
+                            AlfrescoGroupListResponse.GroupEntry entry = wrapper.getEntry();
+                            return new GroupDto(
+                                    entry.getId(),
+                                    entry.getDisplayName(),
+                                    entry.getIsRoot());
+                        })
+                        .collect(Collectors.toList());
+
+                return new GroupListResponse(groups, groups.size());
+            }
+
+            return new GroupListResponse(new ArrayList<>(), 0);
+        } catch (Exception e) {
+            log.error("Error al obtener los grupos del usuario {}: {}", userId, e.getMessage());
+            return new GroupListResponse(new ArrayList<>(), 0);
         }
     }
 }

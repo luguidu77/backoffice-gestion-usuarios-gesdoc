@@ -10,8 +10,9 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 /**
  * Servicio para autenticación y operaciones con Alfresco.
@@ -19,9 +20,9 @@ import java.util.Map;
  * Utiliza Basic Authentication directamente sin tickets.
  * 
  * Responsabilidades:
- *   - Validar credenciales contra Alfresco usando Basic Auth
- *   - Obtener información de usuarios
- *   - Generar tokens de autenticación (username:password en Base64)
+ * - Validar credenciales contra Alfresco usando Basic Auth
+ * - Obtener información de usuarios
+ * - Generar tokens de autenticación (username:password en Base64)
  * 
  * Documentación de Alfresco REST API v1:
  * https://api-explorer.alfresco.com/api-explorer/
@@ -44,7 +45,8 @@ public class AlfrescoAuthService {
      * 
      * @param username Usuario de Alfresco
      * @param password Contraseña del usuario
-     * @return LoginResponse con el token Basic Auth y datos del usuario si el login es exitoso
+     * @return LoginResponse con el token Basic Auth y datos del usuario si el login
+     *         es exitoso
      */
     public LoginResponse login(String username, String password) {
         try {
@@ -52,7 +54,7 @@ public class AlfrescoAuthService {
 
             // 1. Validar credenciales obteniendo información del usuario
             AlfrescoPersonResponse.PersonEntry person = getPersonInfoWithCredentials(username, password);
-            
+
             if (person == null) {
                 log.warn("No se pudo autenticar el usuario: {}", username);
                 return new LoginResponse(false, "Credenciales inválidas");
@@ -63,22 +65,25 @@ public class AlfrescoAuthService {
             // 2. Generar token Basic Auth (username:password en Base64)
             String basicAuthToken = generateBasicAuthToken(username, password);
 
-            // 3. Construir respuesta
+            // 3. Obtener los grupos del usuario
+            List<String> groups = getPersonGroupsWithCredentials(username, basicAuthToken);
+
+            // 4. Construir respuesta
             LoginResponse response = new LoginResponse(
-                true,
-                basicAuthToken,
-                username,
-                person.getFirstName() != null ? person.getFirstName() : username,
-                person.getLastName() != null ? person.getLastName() : "",
-                person.getEmail() != null ? person.getEmail() : ""
-            );
+                    true,
+                    basicAuthToken,
+                    username,
+                    person.getFirstName() != null ? person.getFirstName() : username,
+                    person.getLastName() != null ? person.getLastName() : "",
+                    person.getEmail() != null ? person.getEmail() : "",
+                    groups);
 
             log.info("Login exitoso para usuario: {}", username);
             return response;
 
         } catch (HttpClientErrorException e) {
-            log.error("Error de autenticación para usuario {}: {} - {}", 
-                      username, e.getStatusCode(), e.getMessage());
+            log.error("Error de autenticación para usuario {}: {} - {}",
+                    username, e.getStatusCode(), e.getMessage());
             return new LoginResponse(false, "Credenciales inválidas");
         } catch (Exception e) {
             log.error("Error inesperado durante la autenticación: {}", e.getMessage(), e);
@@ -122,11 +127,10 @@ public class AlfrescoAuthService {
 
             // Hacer la petición a Alfresco
             ResponseEntity<AlfrescoPersonResponse> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                request,
-                AlfrescoPersonResponse.class
-            );
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    AlfrescoPersonResponse.class);
 
             if (response.getBody() != null) {
                 return response.getBody().getEntry();
@@ -135,8 +139,8 @@ public class AlfrescoAuthService {
             return null;
 
         } catch (HttpClientErrorException e) {
-            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || 
-                e.getStatusCode() == HttpStatus.FORBIDDEN) {
+            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED ||
+                    e.getStatusCode() == HttpStatus.FORBIDDEN) {
                 log.warn("Credenciales incorrectas para usuario: {}", username);
             } else {
                 log.error("Error HTTP al obtener usuario: {}", e.getMessage());
@@ -145,6 +149,41 @@ public class AlfrescoAuthService {
         } catch (Exception e) {
             log.warn("No se pudo obtener información del usuario {}: {}", username, e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Obtiene los grupos a los que pertenece un usuario.
+     * 
+     * GET /api/-default-/public/alfresco/versions/1/people/{personId}/groups
+     */
+    private List<String> getPersonGroupsWithCredentials(String username, String basicAuthToken) {
+        try {
+            String url = alfrescoProperties.getCoreApiUrl() + "/people/" + username + "/groups?maxItems=1000";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<AlfrescoGroupListResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    AlfrescoGroupListResponse.class);
+
+            if (response.getBody() != null && response.getBody().getList() != null
+                    && response.getBody().getList().getEntries() != null) {
+                return response.getBody().getList().getEntries().stream()
+                        .map(wrapper -> wrapper.getEntry().getId())
+                        .collect(Collectors.toList());
+            }
+
+            return new ArrayList<>();
+        } catch (Exception e) {
+            log.warn("No se pudieron obtener los grupos del usuario {}: {}", username, e.getMessage());
+            return new ArrayList<>();
         }
     }
 
@@ -162,7 +201,7 @@ public class AlfrescoAuthService {
             byte[] decodedBytes = Base64.getDecoder().decode(basicAuthToken);
             String credentials = new String(decodedBytes);
             String[] parts = credentials.split(":", 2);
-            
+
             if (parts.length != 2) {
                 log.debug("Token inválido: formato incorrecto");
                 return false;
@@ -180,11 +219,10 @@ public class AlfrescoAuthService {
             HttpEntity<Void> request = new HttpEntity<>(headers);
 
             ResponseEntity<String> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                request,
-                String.class
-            );
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    String.class);
 
             return response.getStatusCode() == HttpStatus.OK;
 

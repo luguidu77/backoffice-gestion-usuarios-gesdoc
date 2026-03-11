@@ -1,0 +1,64 @@
+<div class="departments-container">
+    <div class="header-actions">
+        <h3>Departamentos (Área Documental)</h3>
+        <div class="actions">
+            <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">🔄 Actualizar</button>
+            <button class="btn-primary" *ngIf="isGlobalAdmin">➕ Nuevo Departamento</button>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading()" class="loading-state">
+        <div class="spinner"></div>
+        <p>Cargando departamentos...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error() && !loading()" class="error-message">
+        <span class="icon">⚠️</span> {{ error() }}
+        <button class="btn-retry" (click)="refresh()">Reintentar</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container" *ngIf="!loading() && !error()">
+        <table class="departments-table" *ngIf="departments().length > 0">
+            <thead>
+                <tr>
+                    <th>Nombre y Nodo</th>
+                    <th>Herencia de Permisos</th>
+                    <th *ngIf="isGlobalAdmin">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let dept of departments()">
+                    <td class="name-cell">
+                        <div class="folder-icon">📁</div>
+                        <div class="dept-info">
+                            <span class="dept-name">{{ dept.name }}</span>
+                            <span class="dept-id">{{ dept.id }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="inheritance-badge" [class.inherited]="dept.isInheritingPermissions"
+                            [class.custom]="!dept.isInheritingPermissions">
+                            {{ dept.isInheritingPermissions ? 'Heredados' : 'Personalizados' }}
+                        </span>
+                    </td>
+                    <td class="actions-cell" *ngIf="isGlobalAdmin">
+                        <button class="btn-icon" title="Editar Permisos">🔐</button>
+                        <button class="btn-icon" title="Renombrar">✏️</button>
+                        <button class="btn-icon danger" title="Eliminar">🗑️</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Empty State -->
+        <div *ngIf="departments().length === 0" class="empty-state">
+            <div class="empty-icon">📂</div>
+            <h4>Sin Departamentos</h4>
+            <p>No se han creado carpetas base en el Área Documental de esta unidad.</p>
+            <button class="btn-secondary" *ngIf="isGlobalAdmin">Crear primer departamento</button>
+        </div>
+    </div>
+</div>

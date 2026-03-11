@@ -78,7 +78,7 @@
               </span>
             </td>
             <td class="actions-column">
-              <button class="btn-action btn-view" (click)="viewUser(user.id)" title="Ver detalles">
+              <button class="btn-action btn-view" (click)="viewUser(user)" title="Ver detalles">
                 👁️
               </button>
             </td>
@@ -94,4 +94,7 @@
       </div>
     </div>
   </div>
+
+  <app-user-detail-drawer [user]="selectedUser()" [isOpen]="isDrawerOpen()" (closeDrawer)="closeUserDrawer()">
+  </app-user-detail-drawer>
 </div>

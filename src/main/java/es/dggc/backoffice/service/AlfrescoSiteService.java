@@ -2,6 +2,7 @@ package es.dggc.backoffice.service;
 
 import es.dggc.backoffice.config.AlfrescoProperties;
 import es.dggc.backoffice.model.dto.AlfrescoSitesListResponse;
+import es.dggc.backoffice.model.dto.AlfrescoUserSiteListResponse;
 import es.dggc.backoffice.model.dto.SiteListResponse;
 import es.dggc.backoffice.model.dto.SiteListResponse.SiteDto;
 import org.slf4j.Logger;
@@ -122,12 +123,93 @@ public class AlfrescoSiteService {
     }
 
     /**
-     * Obtiene la lista de sitios con valores por defecto de paginación.
-     *
-     * @param basicAuthToken Token de autenticación Basic Auth
-     * @return SiteListResponse con la lista de sitios (máximo 100)
+     * Obtiene la lista de sitios de Alfresco a los que pertenece un usuario.
+     * Útil para Unit Admins que solo deben ver los sitios que gestionan o donde
+     * participan.
      */
-    public SiteListResponse listSites(String basicAuthToken) {
-        return listSites(basicAuthToken, 100, 0);
+    public SiteListResponse listUserSites(String basicAuthToken, String userId, Integer maxItems, Integer skipCount) {
+        try {
+            log.info("Obteniendo lista de sitios para el usuario {} (maxItems={}, skipCount={})", userId, maxItems,
+                    skipCount);
+
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/people/" + userId + "/sites";
+
+            if (maxItems != null || skipCount != null) {
+                url += "?";
+                if (maxItems != null) {
+                    url += "maxItems=" + maxItems;
+                }
+                if (skipCount != null) {
+                    if (maxItems != null)
+                        url += "&";
+                    url += "skipCount=" + skipCount;
+                }
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<AlfrescoUserSiteListResponse> response;
+            try {
+                response = restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        entity,
+                        AlfrescoUserSiteListResponse.class);
+            } catch (HttpClientErrorException.NotFound e) {
+                log.warn("El usuario {} no fue encontrado o no tiene sitios asignados.", userId);
+                return new SiteListResponse(new ArrayList<>(), 0, false);
+            }
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                AlfrescoUserSiteListResponse alfrescoResponse = response.getBody();
+
+                List<SiteDto> sites = new ArrayList<>();
+
+                if (alfrescoResponse != null && alfrescoResponse.getList() != null
+                        && alfrescoResponse.getList().getEntries() != null) {
+                    sites = alfrescoResponse.getList().getEntries().stream()
+                            .map(wrapper -> {
+                                AlfrescoSitesListResponse.SiteEntry siteEntry = wrapper.getEntry().getSite();
+                                return new SiteDto(
+                                        siteEntry.getId(),
+                                        siteEntry.getTitle(),
+                                        siteEntry.getDescription(),
+                                        siteEntry.getVisibility());
+                            })
+                            .collect(Collectors.toList());
+                }
+
+                Integer totalItems = (alfrescoResponse != null && alfrescoResponse.getList() != null &&
+                        alfrescoResponse.getList().getPagination() != null)
+                                ? alfrescoResponse.getList().getPagination().getTotalItems()
+                                : sites.size();
+
+                Boolean hasMore = (alfrescoResponse != null && alfrescoResponse.getList() != null &&
+                        alfrescoResponse.getList().getPagination() != null)
+                                ? alfrescoResponse.getList().getPagination().getHasMoreItems()
+                                : false;
+
+                log.info("Sitios obtenidos exitosamente para el usuario {}: {} de {} totales", userId, sites.size(),
+                        totalItems);
+                return new SiteListResponse(sites, totalItems, hasMore);
+            }
+
+            log.warn("No se pudo obtener la lista de sitios para el usuario {}. Status: {}", userId,
+                    response.getStatusCode());
+            return new SiteListResponse(new ArrayList<>(), 0, false);
+
+        } catch (HttpClientErrorException e) {
+            log.error("Error HTTP al obtener sitios del usuario {}: {} - {}", userId, e.getStatusCode(),
+                    e.getMessage());
+            return new SiteListResponse(new ArrayList<>(), 0, false);
+        } catch (Exception e) {
+            log.error("Error inesperado al obtener sitios del usuario {}: {}", userId, e.getMessage(), e);
+            return new SiteListResponse(new ArrayList<>(), 0, false);
+        }
     }
 }

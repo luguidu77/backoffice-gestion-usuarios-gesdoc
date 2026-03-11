@@ -15,6 +15,7 @@ public class LoginResponse {
     private String lastName;
     private String email;
     private String message;
+    private java.util.List<String> groups;
 
     // ============================================================
     // CONSTRUCTORES
@@ -28,14 +29,16 @@ public class LoginResponse {
         this.message = message;
     }
 
-    public LoginResponse(boolean success, String ticket, String username, 
-                         String firstName, String lastName, String email) {
+    public LoginResponse(boolean success, String ticket, String username,
+            String firstName, String lastName, String email,
+            java.util.List<String> groups) {
         this.success = success;
         this.ticket = ticket;
         this.username = username;
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
+        this.groups = groups;
     }
 
     // ============================================================
@@ -96,5 +99,13 @@ public class LoginResponse {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public java.util.List<String> getGroups() {
+        return groups;
+    }
+
+    public void setGroups(java.util.List<String> groups) {
+        this.groups = groups;
     }
 }

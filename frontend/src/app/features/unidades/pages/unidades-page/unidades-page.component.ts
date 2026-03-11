@@ -2,6 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { SiteService } from '../../../../core/services/site.service';
+import { AuthService } from '../../../../core/services/auth.service';
 import { Site } from '../../../../core/models/site.model';
 
 @Component({
@@ -20,6 +21,7 @@ export class UnidadesPageComponent implements OnInit {
 
   constructor(
     private siteService: SiteService,
+    private authService: AuthService,
     private router: Router
   ) { }
 
@@ -35,13 +37,13 @@ export class UnidadesPageComponent implements OnInit {
     this.error.set('');
 
     this.siteService.getSites(100, 0).subscribe({
-      next: (response) => {
+      next: (response: any) => {
         this.sites.set(response.sites);
         this.totalSites.set(response.totalSites);
         this.hasMore.set(response.hasMore);
         this.loading.set(false);
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Error cargando sitios:', err);
         this.error.set('Error al cargar la lista de sitios');
         this.loading.set(false);
@@ -77,7 +79,17 @@ export class UnidadesPageComponent implements OnInit {
    * Navega a la gestión de usuarios filtrando por este sitio.
    */
   viewMembers(siteId: string, siteName?: string): void {
-    this.router.navigate(['/users'], { queryParams: { siteId, siteName } });
+    if (this.canManageUnit()) {
+      this.router.navigate(['/users'], { queryParams: { siteId, siteName } });
+    }
+  }
+
+  /**
+   * Determina si el usuario actual tiene permisos de administración elevados sobre las unidades.
+   */
+  canManageUnit(): boolean {
+    const user = this.authService.getUserData();
+    return user?.isGlobalAdmin === true;
   }
 
   /**

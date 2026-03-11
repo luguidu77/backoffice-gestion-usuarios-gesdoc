@@ -56,7 +56,7 @@
                             </span>
                         </td>
                         <td class="actions-column">
-                            <button class="btn-action btn-view-members" title="Ver miembros">
+                            <button *ngIf="canManageUnit()" class="btn-action btn-view-members" title="Ver miembros">
                                 👥
                             </button>
                         </td>

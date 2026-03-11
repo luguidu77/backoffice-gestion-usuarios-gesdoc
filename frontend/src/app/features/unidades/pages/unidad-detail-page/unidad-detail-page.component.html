@@ -1,0 +1,127 @@
+<div class="site-detail-container">
+    <div class="page-header">
+        <div class="breadcrumbs">
+            <a routerLink="/unidades" class="breadcrumb-link">Unidades</a>
+            <span class="separator">></span>
+            <span class="current">{{ siteId() }}</span>
+        </div>
+
+        <div class="header-main">
+            <div class="title-area">
+                <div class="icon">🏢</div>
+                <h1>{{ siteId() }}</h1>
+            </div>
+            <div class="actions">
+                <!-- Botones globales (ej. Sincronizar) -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Navegación de pestañas -->
+    <div class="tabs-nav">
+        <button class="tab-btn" [class.active]="activeTab() === 'resumen'" (click)="setTab('resumen')">
+            📄 Resumen
+        </button>
+        <button class="tab-btn" [class.active]="activeTab() === 'departamentos'" (click)="setTab('departamentos')">
+            📁 Departamentos
+        </button>
+        <button class="tab-btn" [class.active]="activeTab() === 'miembros'" (click)="setTab('miembros')">
+            👥 Miembros
+        </button>
+        <button class="tab-btn" *ngIf="isGlobalAdmin()" [class.active]="activeTab() === 'ajustes'"
+            (click)="setTab('ajustes')">
+            ⚙️ Ajustes
+        </button>
+    </div>
+
+    <!-- Contenido de las pestañas -->
+    <div class="tab-content">
+        <!-- Pestaña: Resumen -->
+        <div *ngIf="activeTab() === 'resumen'" class="tab-pane">
+            <div class="metadata-card">
+                <h3>Información de la unidad</h3>
+                <p>En el futuro este panel mostrará descripciones de la unidad, o estadísticas de uso de Alfresco.</p>
+            </div>
+        </div>
+
+        <!-- Pestaña: Departamentos -->
+        <div *ngIf="activeTab() === 'departamentos'" class="tab-pane">
+            <app-department-list [siteId]="siteId()" [isGlobalAdmin]="isGlobalAdmin()"></app-department-list>
+        </div>
+
+        <!-- Pestaña: Miembros -->
+        <div *ngIf="activeTab() === 'miembros'" class="tab-pane">
+            <div class="metadata-card">
+                <div class="card-header">
+                    <h3>Miembros y Roles</h3>
+                    <button class="btn-primary" *ngIf="isGlobalAdmin()">
+                        <span class="icon">➕</span> Añadir Miembro
+                    </button>
+                </div>
+
+                <div *ngIf="loadingMembers()" class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Obteniendo miembros de la unidad...</p>
+                </div>
+
+                <div *ngIf="membersError()" class="error-message">
+                    <span class="icon">⚠️</span> {{ membersError() }}
+                    <button class="btn-retry" (click)="loadMembers()">Reintentar</button>
+                </div>
+
+                <div class="table-container" *ngIf="!loadingMembers() && !membersError()">
+                    <table class="members-table" *ngIf="members().length > 0">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Estado</th>
+                                <th>Rol en Unidad</th>
+                                <th *ngIf="isGlobalAdmin()">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let member of members()">
+                                <td class="id-cell">
+                                    <div class="avatar">{{ member.firstName.charAt(0) }}{{ member.lastName ?
+                                        member.lastName.charAt(0) : '' }}</div>
+                                    <span class="user-id">{{ member.id }}</span>
+                                </td>
+                                <td>{{ member.firstName }} {{ member.lastName }}</td>
+                                <td class="email-cell">{{ member.email }}</td>
+                                <td>
+                                    <span class="status-badge" [class.active]="member.enabled"
+                                        [class.inactive]="!member.enabled">
+                                        {{ member.enabled ? 'Activo' : 'Inactivo' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="role-badge generic">Miembro Genérico</span>
+                                </td>
+                                <td class="actions-cell" *ngIf="isGlobalAdmin()">
+                                    <button class="btn-icon" title="Editar Rol">✏️</button>
+                                    <button class="btn-icon danger" title="Expulsar">🗑️</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div *ngIf="members().length === 0" class="empty-state">
+                        <div class="empty-icon">👥</div>
+                        <h4>Unidad sin miembros</h4>
+                        <p>No se encontraron usuarios asignados directamente a esta unidad.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña: Ajustes -->
+        <div *ngIf="activeTab() === 'ajustes'" class="tab-pane">
+            <div class="metadata-card">
+                <h3>Ajustes Técnicos</h3>
+                <p>Opciones peligrosas solo visibles para Global Admins.</p>
+            </div>
+        </div>
+    </div>
+</div>

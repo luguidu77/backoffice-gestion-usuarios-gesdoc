@@ -2,15 +2,18 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Site, SiteListResponse } from '../models/site.model';
-import { environment } from '../../../environments/environment';
+import { AuthService } from './auth.service';
 
 @Injectable({
     providedIn: 'root'
 })
 export class SiteService {
-    private apiUrl = `${environment.apiUrl}/sites`;
+    private readonly API_URL = '/api/sites';
 
-    constructor(private http: HttpClient) { }
+    constructor(
+        private http: HttpClient,
+        private authService: AuthService
+    ) { }
 
     /**
      * Obtiene la lista de sitios de Alfresco.
@@ -20,11 +23,22 @@ export class SiteService {
      * @returns Observable con la lista de sitios
      */
     getSites(maxItems: number = 100, skipCount: number = 0): Observable<SiteListResponse> {
-        const params = new HttpParams()
+        let params = new HttpParams()
             .set('maxItems', maxItems.toString())
             .set('skipCount', skipCount.toString());
 
-        return this.http.get<SiteListResponse>(this.apiUrl, { params });
+        // Añadir rol y userId si están disponibles
+        const user = this.authService.getUserData();
+        if (user) {
+            if (user.role) {
+                params = params.set('role', user.role);
+            }
+            if (user.username) {
+                params = params.set('userId', user.username);
+            }
+        }
+
+        return this.http.get<SiteListResponse>(this.API_URL, { params });
     }
 
     /**
@@ -34,6 +48,6 @@ export class SiteService {
      * @returns Observable con la información del sitio
      */
     getSiteById(siteId: string): Observable<Site> {
-        return this.http.get<Site>(`${this.apiUrl}/${siteId}`);
+        return this.http.get<Site>(`${this.API_URL}/${siteId}`);
     }
 }
