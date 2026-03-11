@@ -1,0 +1,212 @@
+<!-- Overlay -->
+<div class="drawer-overlay" [class.open]="isOpen" (click)="onClose()"></div>
+
+<!-- Drawer Panel -->
+<div class="drawer-panel" [class.open]="isOpen">
+
+    <!-- Header -->
+    <div class="drawer-header">
+        <div class="header-info">
+            <div class="icon-folder">📁</div>
+            <div>
+                <h3>Permisos del Departamento</h3>
+                <span class="node-name">{{ nodeName }}</span>
+            </div>
+        </div>
+        <button class="btn-close" (click)="onClose()" title="Cerrar">✖</button>
+    </div>
+
+    <!-- Content -->
+    <div class="drawer-content">
+
+        <!-- Loading -->
+        <div *ngIf="loading()" class="loading-state">
+            <div class="spinner"></div>
+            <p>Cargando permisos...</p>
+        </div>
+
+        <!-- Error -->
+        <div *ngIf="error() && !loading()" class="alert alert-error">
+            <span>⚠️</span> {{ error() }}
+        </div>
+
+        <!-- Success -->
+        <div *ngIf="successMessage()" class="alert alert-success">
+            <span>✅</span> {{ successMessage() }}
+        </div>
+
+        <!-- Main Content -->
+        <ng-container *ngIf="!loading() && permissions()">
+
+            <!-- Herencia de permisos -->
+            <section class="section">
+                <h4 class="section-title">Herencia de Permisos</h4>
+                <div class="inheritance-row">
+                    <div class="toggle-wrapper" (click)="toggleInheritance()">
+                        <div class="toggle" [class.active]="inheritanceEnabled()"></div>
+                        <div class="toggle-labels">
+                            <span class="toggle-label">
+                                {{ inheritanceEnabled() ? '✅ Herencia activada' : '🔒 Herencia desactivada (permisos propios)' }}
+                            </span>
+                            <span class="toggle-hint">
+                                {{ inheritanceEnabled()
+                                    ? 'Los permisos del sitio padre se aplican a esta carpeta.'
+                                    : 'Esta carpeta tiene permisos independientes del sitio padre.' }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Permisos heredados (solo informativo) -->
+            <section class="section" *ngIf="inheritanceEnabled() && permissions()!.inherited.length > 0">
+                <h4 class="section-title">
+                    Permisos Heredados
+                    <span class="badge-info">solo lectura</span>
+                </h4>
+                <div class="permissions-table-wrapper">
+                    <table class="permissions-table inherited-table">
+                        <thead>
+                            <tr>
+                                <th>Autoridad</th>
+                                <th>Tipo</th>
+                                <th>Rol</th>
+                                <th>Acceso</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let perm of permissions()!.inherited">
+                                <td class="authority-cell">
+                                    <span class="authority-icon">{{ perm.authorityType === 'GROUP' ? '👥' : '👤' }}</span>
+                                    <span>{{ perm.authorityDisplayName || perm.authorityId }}</span>
+                                </td>
+                                <td>
+                                    <span class="type-badge" [class.group]="perm.authorityType === 'GROUP'" [class.user]="perm.authorityType === 'USER'">
+                                        {{ perm.authorityType || '—' }}
+                                    </span>
+                                </td>
+                                <td>{{ getRoleLabel(perm.name) }}</td>
+                                <td>
+                                    <span class="access-badge" [class.allowed]="perm.accessStatus === 'ALLOWED'" [class.denied]="perm.accessStatus === 'DENIED'">
+                                        {{ perm.accessStatus }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Permisos locales (editables) -->
+            <section class="section">
+                <h4 class="section-title">
+                    Permisos Propios de esta Carpeta
+                    <span class="badge-count">{{ localPermissions().length }}</span>
+                </h4>
+
+                <div class="permissions-table-wrapper" *ngIf="localPermissions().length > 0">
+                    <table class="permissions-table">
+                        <thead>
+                            <tr>
+                                <th>Autoridad</th>
+                                <th>Tipo</th>
+                                <th>Rol</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let perm of localPermissions()">
+                                <td class="authority-cell">
+                                    <span class="authority-icon">{{ perm.authorityType === 'GROUP' ? '👥' : '👤' }}</span>
+                                    <span>{{ perm.authorityDisplayName || perm.authorityId }}</span>
+                                </td>
+                                <td>
+                                    <span class="type-badge" [class.group]="perm.authorityType === 'GROUP'" [class.user]="perm.authorityType === 'USER'">
+                                        {{ perm.authorityType || '—' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <select class="role-select" [value]="perm.name"
+                                        (change)="updatePermissionRole(perm.authorityId, $any($event.target).value)">
+                                        <option *ngFor="let role of CONTENT_ROLES" [value]="role.value">
+                                            {{ role.label }}
+                                        </option>
+                                    </select>
+                                </td>
+                                <td class="action-cell">
+                                    <button class="btn-remove" (click)="removePermission(perm.authorityId)" title="Eliminar permiso">🗑️</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div *ngIf="localPermissions().length === 0" class="empty-notice">
+                    No hay permisos propios configurados para esta carpeta.
+                </div>
+
+                <!-- Formulario para agregar permiso -->
+                <div class="add-permission-form">
+                    <h5>Agregar Permiso</h5>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Grupo o Usuario (ID)</label>
+                            <div class="autocomplete-wrapper">
+                                <input type="text"
+                                    class="form-input"
+                                    placeholder="Buscar grupo... (ej: GROUP_contabilidad)"
+                                    [value]="groupSearchTerm()"
+                                    (input)="onGroupSearch($any($event.target).value)"
+                                    (blur)="newPermAuthority.set($any($event.target).value)" />
+                                <div class="group-dropdown" *ngIf="availableGroups().length > 0 && groupSearchTerm()">
+                                    <div class="group-option" *ngFor="let group of availableGroups()"
+                                        (mousedown)="newPermAuthority.set(group.id); groupSearchTerm.set(group.displayName)">
+                                        <span>👥</span>
+                                        <div>
+                                            <span class="opt-name">{{ group.displayName }}</span>
+                                            <span class="opt-id">{{ group.id }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group form-group-sm">
+                            <label>Rol</label>
+                            <select class="form-input" [value]="newPermRole()"
+                                (change)="newPermRole.set($any($event.target).value)">
+                                <option *ngFor="let role of CONTENT_ROLES" [value]="role.value">
+                                    {{ role.label }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="form-group form-group-sm">
+                            <label>Acceso</label>
+                            <select class="form-input" [value]="newPermAccess()"
+                                (change)="newPermAccess.set($any($event.target).value)">
+                                <option value="ALLOWED">PERMITIDO</option>
+                                <option value="DENIED">DENEGADO</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-add" (click)="addPermission()" [disabled]="!newPermAuthority()">
+                        ➕ Agregar
+                    </button>
+                </div>
+            </section>
+
+        </ng-container>
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="drawer-footer" *ngIf="permissions() && !loading()">
+        <button class="btn-secondary" (click)="discardChanges()" [disabled]="!isModified() || saving()">
+            Descartar
+        </button>
+        <button class="btn-primary" (click)="save()" [disabled]="!isModified() || saving()">
+            <span *ngIf="saving()">Guardando...</span>
+            <span *ngIf="!saving()">💾 Guardar Cambios</span>
+        </button>
+    </div>
+</div>

@@ -3,13 +3,13 @@
         <div class="breadcrumbs">
             <a routerLink="/unidades" class="breadcrumb-link">Unidades</a>
             <span class="separator">></span>
-            <span class="current">{{ siteId() }}</span>
+            <span class="current">{{ siteName() || siteId() }}</span>
         </div>
 
         <div class="header-main">
             <div class="title-area">
                 <div class="icon">🏢</div>
-                <h1>{{ siteId() }}</h1>
+                <h1>{{ siteName() || siteId() }}</h1>
             </div>
             <div class="actions">
                 <!-- Botones globales (ej. Sincronizar) -->

@@ -54,6 +54,14 @@ export const routes: Routes = [
       import('./features/unidades/unidades.routes').then(m => m.unidadesRoutes)
   },
   {
+    // Gestión de grupos Alfresco - solo GLOBAL_ADMIN
+    path: 'groups',
+    canActivate: [authGuard, roleGuard],
+    data: { roles: [AppRole.GLOBAL_ADMIN] },
+    loadChildren: () =>
+      import('./features/groups/groups.routes').then(m => m.groupsRoutes)
+  },
+  {
     // Wildcard: ruta no encontrada → redirige al dashboard
     path: '**',
     redirectTo: 'dashboard'

@@ -27,3 +27,15 @@ export interface GroupListResponse {
   groups: Group[];
   totalItems: number;
 }
+
+export interface UserSiteMembership {
+  siteId: string;
+  siteTitle: string;
+  role: string;
+  visibility: string;
+}
+
+export interface UserSiteMembershipListResponse {
+  sites: UserSiteMembership[];
+  totalItems: number;
+}

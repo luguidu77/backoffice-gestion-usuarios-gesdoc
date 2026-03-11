@@ -1,18 +1,12 @@
 <div class="sites-list-container">
     <div class="page-header">
-        <h1>Unidades (Sitios)</h1>
-        <div class="header-actions">
-            <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
-                <span class="icon">🔄</span>
-                Actualizar
-            </button>
+        <h1>Unidades</h1>
+        <div class="search-box" [class.searching]="loading()">
+            <span class="search-icon">🔍</span>
+            <input type="text" [ngModel]="searchTerm()" (ngModelChange)="onSearchInput($event)"
+                placeholder="Buscar por ID, nombre o descripción...">
+            <span *ngIf="loading()" class="loading-dot"></span>
         </div>
-    </div>
-
-    <!-- Loading spinner -->
-    <div *ngIf="loading()" class="loading-container">
-        <div class="spinner"></div>
-        <p>Cargando sitios...</p>
     </div>
 
     <!-- Error message -->
@@ -22,19 +16,25 @@
         <button class="btn-retry" (click)="refresh()">Reintentar</button>
     </div>
 
-    <!-- Sites list -->
-    <div *ngIf="!loading() && !error()" class="sites-content">
+    <!-- Sites list: siempre presente, opacidad reducida al cargar -->
+    <div class="sites-content" [class.content-loading]="loading()">
         <!-- Summary -->
         <div class="summary">
             <p>
-                <strong>Total de sitios:</strong> {{ totalSites() }}
-                <span *ngIf="hasMore()" class="more-indicator">(hay más sitios disponibles)</span>
+                <ng-container *ngIf="userRole === 'GLOBAL_ADMIN'">
+                    <strong>Total de sitios:</strong> {{ totalSites() }}
+                    <span *ngIf="hasMore()" class="more-indicator">(hay más sitios disponibles)</span>
+                </ng-container>
+                <ng-container *ngIf="userRole === 'UNIT_ADMIN'">
+                    <strong>Tus unidades:</strong> {{ filteredSites().length }}
+                    <span class="role-scope-badge">Solo tus unidades</span>
+                </ng-container>
             </p>
         </div>
 
         <!-- Table -->
         <div class="table-container">
-            <table class="sites-table" *ngIf="sites().length > 0">
+            <table class="sites-table" *ngIf="filteredSites().length > 0">
                 <thead>
                     <tr>
                         <th>TIP</th>
@@ -45,10 +45,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr *ngFor="let site of sites()" (click)="viewMembers(site.id, site.description || site.title)"
+                    <tr *ngFor="let site of filteredSites()" (click)="viewMembers(site.id, site.description || site.title)"
                         class="site-row" title="Ver miembros de este sitio">
                         <td class="id-column">{{ site.id }}</td>
-                        <td class="title-column">{{ site.title || site.id }}</td>
+                        <td class="title-column">{{ site.description || site.title || site.id }}</td>
                         <td class="description-column">{{ site.description || '-' }}</td>
                         <td class="visibility-column">
                             <span class="visibility-badge" [ngClass]="getVisibilityClass(site.visibility)">
@@ -65,10 +65,10 @@
             </table>
 
             <!-- Empty state -->
-            <div *ngIf="sites().length === 0" class="empty-state">
+            <div *ngIf="filteredSites().length === 0 && !loading()" class="empty-state">
                 <div class="empty-icon">🏢</div>
-                <h3>No hay sitios disponibles</h3>
-                <p>No se encontraron sitios en el sistema.</p>
+                <h3>No hay unidades disponibles</h3>
+                <p>No se encontraron unidades en el sistema.</p>
             </div>
         </div>
     </div>

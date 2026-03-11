@@ -3,7 +3,10 @@
     <div class="sidebar-header">
         <div class="brand" *ngIf="!isCollapsed">
             <span class="brand-avatar" aria-hidden="true">{{ initials }}</span>
-            <span class="brand-title">{{ displayName }}</span>
+            <div class="brand-info">
+                <span class="brand-title">{{ displayName }}</span>
+                <span *ngIf="roleLabel" class="brand-role" [ngClass]="roleClass">{{ roleLabel }}</span>
+            </div>
         </div>
         <div class="brand-collapsed" *ngIf="isCollapsed">
             <span class="brand-avatar" aria-hidden="true" [title]="displayName">{{ initials }}</span>
@@ -34,6 +37,12 @@
             title="Unidades">
             <span class="nav-icon" aria-hidden="true">&#128194;</span> <!-- Icono de carpeta abierta -->
             <span class="nav-text" *ngIf="!isCollapsed">Unidades</span>
+        </a>
+
+        <a *ngIf="isGlobalAdmin" routerLink="/groups" routerLinkActive="active" class="nav-link"
+            aria-label="Gestión de grupos" title="Grupos">
+            <span class="nav-icon" aria-hidden="true">&#128101;</span> <!-- Icono de grupo -->
+            <span class="nav-text" *ngIf="!isCollapsed">Grupos</span>
         </a>
     </nav>
 

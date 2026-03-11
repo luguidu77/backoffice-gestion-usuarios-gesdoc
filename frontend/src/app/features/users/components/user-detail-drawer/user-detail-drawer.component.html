@@ -35,8 +35,26 @@
         <!-- Sitios/Unidades -->
         <section class="info-section">
             <h4>Unidades y Permisos Asociados</h4>
-            <p class="placeholder-text">Próximamente: listado de roles (Manager, Collaborator...) en cada Unidad mapeado
-                desde Alfresco.</p>
+
+            <div *ngIf="loadingSites()" class="loading-mini">
+                <span class="spinner-small"></span> Cargando unidades...
+            </div>
+
+            <div *ngIf="!loadingSites() && userSites().length === 0" class="placeholder-text">
+                El usuario no pertenece a ninguna unidad.
+            </div>
+
+            <ul *ngIf="!loadingSites() && userSites().length > 0" class="site-list">
+                <li *ngFor="let site of userSites()" class="site-item">
+                    <div class="site-info">
+                        <span class="site-icon">🏛️</span>
+                        <span class="site-title">{{ site.siteTitle || site.siteId }}</span>
+                    </div>
+                    <span class="role-badge" [ngClass]="getRoleClass(site.role)">
+                        {{ getRoleLabel(site.role) }}
+                    </span>
+                </li>
+            </ul>
         </section>
 
         <!-- Grupos de directorio -->

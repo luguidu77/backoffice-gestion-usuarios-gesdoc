@@ -45,6 +45,36 @@
       font-weight: bold;
       flex-shrink: 0;
     }
+
+    .brand-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .brand-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand-role {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      width: fit-content;
+
+      &.role-global  { background: #fef08a; color: #78350f; }
+      &.role-unit    { background: #bfdbfe; color: #1e3a8a; }
+      &.role-readonly { background: #e5e7eb; color: #6b7280; }
+    }
   }
 
   .brand-collapsed {

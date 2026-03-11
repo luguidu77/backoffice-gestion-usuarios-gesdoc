@@ -1,6 +1,8 @@
 package es.dggc.backoffice.controller;
 
 import es.dggc.backoffice.model.dto.DepartmentListResponse;
+import es.dggc.backoffice.model.dto.NodePermissionsResponse;
+import es.dggc.backoffice.model.dto.UpdateNodePermissionsRequest;
 import es.dggc.backoffice.service.AlfrescoNodeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,9 +47,59 @@ public class NodeController {
         }
 
         String token = authHeader.substring(6);
-
         DepartmentListResponse response = nodeService.listSiteDepartments(token, siteId, maxItems, skipCount);
-
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Obtiene los permisos del nodo (locales y heredados).
+     *
+     * GET /api/nodes/{nodeId}/permissions
+     * Header: Authorization: Basic {token}
+     */
+    @GetMapping("/{nodeId}/permissions")
+    public ResponseEntity<NodePermissionsResponse> getNodePermissions(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String nodeId) {
+
+        log.info("Solicitud de permisos para el nodo {}", nodeId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String token = authHeader.substring(6);
+        NodePermissionsResponse response = nodeService.getNodePermissions(token, nodeId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Actualiza los permisos de un nodo.
+     * Puede cambiar la herencia y/o reemplazar la lista de permisos locales.
+     *
+     * PUT /api/nodes/{nodeId}/permissions
+     * Header: Authorization: Basic {token}
+     * Body: { "isInheritanceEnabled": bool, "locallySet": [...] }
+     */
+    @PutMapping("/{nodeId}/permissions")
+    public ResponseEntity<?> updateNodePermissions(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String nodeId,
+            @RequestBody UpdateNodePermissionsRequest request) {
+
+        log.info("Actualización de permisos para el nodo {}", nodeId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autorizado");
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            NodePermissionsResponse response = nodeService.updateNodePermissions(token, nodeId, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.error("Error actualizando permisos del nodo {}: {}", nodeId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
     }
 }

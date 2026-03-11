@@ -1,0 +1,91 @@
+<!-- Overlay -->
+<div class="drawer-overlay" [class.open]="isOpen" (click)="onClose()"></div>
+
+<!-- Drawer Panel -->
+<div class="drawer-panel" [class.open]="isOpen">
+
+    <!-- Header -->
+    <div class="drawer-header">
+        <div class="header-info">
+            <div class="group-avatar">👥</div>
+            <div>
+                <h3>{{ group?.displayName }}</h3>
+                <code class="group-id">{{ group?.id }}</code>
+            </div>
+        </div>
+        <button class="btn-close" (click)="onClose()" title="Cerrar">✖</button>
+    </div>
+
+    <!-- Content -->
+    <div class="drawer-content">
+
+        <!-- Loading -->
+        <div *ngIf="loading()" class="loading-state">
+            <div class="spinner"></div>
+            <p>Cargando miembros...</p>
+        </div>
+
+        <!-- Error -->
+        <div *ngIf="error() && !loading()" class="alert alert-error">
+            <span>⚠️</span> {{ error() }}
+        </div>
+
+        <!-- Group Info -->
+        <div class="group-meta" *ngIf="group && !loading()">
+            <div class="meta-chip">
+                <span class="meta-label">Tipo</span>
+                <span class="meta-value badge" [class.root]="group.isRoot" [class.sub]="!group.isRoot">
+                    {{ group.isRoot ? 'Grupo Raíz' : 'Sub-grupo' }}
+                </span>
+            </div>
+            <div class="meta-chip">
+                <span class="meta-label">Total miembros</span>
+                <span class="meta-value">{{ totalItems() }}</span>
+            </div>
+        </div>
+
+        <ng-container *ngIf="!loading() && !error()">
+
+            <!-- Sub-groups section -->
+            <section class="section" *ngIf="groupMembers.length > 0">
+                <h4 class="section-title">
+                    <span>🏷️</span> Sub-grupos ({{ groupMembers.length }})
+                </h4>
+                <ul class="members-list">
+                    <li *ngFor="let member of groupMembers" class="member-item">
+                        <div class="member-avatar group-type">👥</div>
+                        <div class="member-info">
+                            <span class="member-name">{{ member.displayName || member.id }}</span>
+                            <code class="member-id">{{ member.id }}</code>
+                        </div>
+                        <span class="member-type-badge group-badge">GRUPO</span>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- People section -->
+            <section class="section" *ngIf="personMembers.length > 0">
+                <h4 class="section-title">
+                    <span>👤</span> Usuarios ({{ personMembers.length }})
+                </h4>
+                <ul class="members-list">
+                    <li *ngFor="let member of personMembers" class="member-item">
+                        <div class="member-avatar person-type">{{ (member.displayName || member.id).charAt(0).toUpperCase() }}</div>
+                        <div class="member-info">
+                            <span class="member-name">{{ member.displayName || member.id }}</span>
+                            <code class="member-id">{{ member.id }}</code>
+                        </div>
+                        <span class="member-type-badge person-badge">USUARIO</span>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- Empty -->
+            <div *ngIf="members().length === 0 && !loading()" class="empty-state">
+                <div class="empty-icon">👥</div>
+                <p>Este grupo no tiene miembros.</p>
+            </div>
+
+        </ng-container>
+    </div>
+</div>

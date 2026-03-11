@@ -134,6 +134,21 @@ export class AuthService {
   }
 
   /**
+   * Devuelve el rol del usuario autenticado.
+   */
+  getUserRole(): string | null {
+    return this.getUserData()?.role ?? null;
+  }
+
+  /**
+   * Devuelve los IDs de los sitios que gestiona el usuario (UNIT_ADMIN).
+   * Para GLOBAL_ADMIN devuelve [] (puede ver todo sin filtro).
+   */
+  getManagedSiteIds(): string[] {
+    return this.getUserData()?.managedSiteIds ?? [];
+  }
+
+  /**
    * Guarda el ticket en localStorage.
    */
   private saveTicket(ticket: string): void {
@@ -142,19 +157,43 @@ export class AuthService {
 
   /**
    * Guarda los datos del usuario en localStorage.
+   *
+   * Lógica de roles:
+   *   - GLOBAL_ADMIN  → pertenece al grupo GROUP_ALFRESCO_ADMINISTRATORS
+   *   - UNIT_ADMIN    → gestiona al menos un sitio (grupo GROUP_site_<id>_SiteManager)
+   *   - READ_ONLY     → no es admin global ni gestor de ningún sitio
    */
   private saveUserData(data: LoginResponse): void {
-    const isAdmin = data.groups?.includes('GROUP_ALFRESCO_ADMINISTRATORS') || false;
-    // Base role logic. If not global admin, we assume standard unit admin until they access a specific view
-    const derivedRole = isAdmin ? 'GLOBAL_ADMIN' : 'UNIT_ADMIN';
+    const groups = data.groups || [];
+    const isAdmin = groups.includes('GROUP_ALFRESCO_ADMINISTRATORS');
+
+    // Extraer IDs de sitios donde el usuario es SiteManager
+    // Nombre del grupo: GROUP_site_<siteId>_SiteManager
+    const managedSiteIds: string[] = [];
+    for (const group of groups) {
+      const match = group.match(/^GROUP_site_(.+)_SiteManager$/);
+      if (match) {
+        managedSiteIds.push(match[1]);
+      }
+    }
+
+    let derivedRole: string;
+    if (isAdmin) {
+      derivedRole = 'GLOBAL_ADMIN';
+    } else if (managedSiteIds.length > 0) {
+      derivedRole = 'UNIT_ADMIN';
+    } else {
+      derivedRole = 'READ_ONLY';
+    }
 
     const userData = {
       username: data.username,
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
-      groups: data.groups || [],
+      groups,
       isGlobalAdmin: isAdmin,
+      managedSiteIds,
       role: derivedRole
     };
     localStorage.setItem(this.USER_KEY, JSON.stringify(userData));

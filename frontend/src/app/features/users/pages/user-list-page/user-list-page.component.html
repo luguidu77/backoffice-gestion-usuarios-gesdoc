@@ -3,18 +3,12 @@
     <h1>Gestión de Usuarios</h1>
     <!-- Search and Actions -->
     <div class="actions-bar">
-      <div class="search-box">
+      <div class="search-box" [class.searching]="loading()">
         <span class="search-icon">🔍</span>
-        <input type="text" [(ngModel)]="searchTerm" (keyup.enter)="onSearch()"
+        <input type="text" [ngModel]="searchTerm()" (ngModelChange)="onSearchInput($event)" (keyup.enter)="onSearch()"
           placeholder="Buscar usuarios por TIP, nombre o email...">
-        <button class="btn-search" (click)="onSearch()">Buscar</button>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
-          <span class="icon">🔄</span>
-          Actualizar
-        </button>
+        <span *ngIf="loading()" class="loading-dot"></span>
+        <button class="btn-search" (click)="onSearch()" [disabled]="loading()">Buscar</button>
       </div>
     </div>
   </div>
@@ -30,12 +24,6 @@
     <button class="btn-clear" (click)='clearFilters()'>Limpiar filtros</button>
   </div>
 
-  <!-- Loading spinner -->
-  <div *ngIf="loading()" class="loading-container">
-    <div class="spinner"></div>
-    <p>Cargando usuarios...</p>
-  </div>
-
   <!-- Error message -->
   <div *ngIf="error() && !loading()" class="error-message">
     <span class="icon">⚠️</span>
@@ -43,8 +31,8 @@
     <button class="btn-retry" (click)="refresh()">Reintentar</button>
   </div>
 
-  <!-- User list -->
-  <div *ngIf="!loading() && !error()" class="users-content">
+  <!-- User list: siempre presente, opacidad reducida al cargar -->
+  <div class="users-content" [class.content-loading]="loading()">
     <!-- Summary -->
     <div class="summary">
       <p>
@@ -87,7 +75,7 @@
       </table>
 
       <!-- Empty state -->
-      <div *ngIf="users().length === 0" class="empty-state">
+      <div *ngIf="users().length === 0 && !loading()" class="empty-state">
         <div class="empty-icon">👥</div>
         <h3>No hay usuarios disponibles</h3>
         <p>No se encontraron usuarios en el sistema.</p>

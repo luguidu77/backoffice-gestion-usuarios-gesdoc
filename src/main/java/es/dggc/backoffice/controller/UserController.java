@@ -2,12 +2,14 @@ package es.dggc.backoffice.controller;
 
 import es.dggc.backoffice.model.dto.UserListResponse;
 import es.dggc.backoffice.model.dto.GroupListResponse;
+import es.dggc.backoffice.model.dto.UserSiteMembershipListResponse;
 import es.dggc.backoffice.service.AlfrescoUserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 
 /**
  * Controlador REST para operaciones de gestión de usuarios.
@@ -65,22 +67,25 @@ public class UserController {
         // Extraer token (quitar "Basic ")
         String token = authHeader.substring(6);
 
-        // Obtener lista de usuarios según parámetros
-        UserListResponse response;
-        if (siteId != null && !siteId.trim().isEmpty()) {
-            response = alfrescoUserService.listSiteMembers(token, siteId, maxItems, skipCount);
-        } else if (searchTerm != null && !searchTerm.trim().isEmpty()) {
-            response = alfrescoUserService.searchUsers(token, searchTerm, maxItems, skipCount);
-        } else {
-            response = alfrescoUserService.listUsers(token, maxItems, skipCount);
-        }
+        try {
+            // Obtener lista de usuarios según parámetros
+            UserListResponse response;
+            if (siteId != null && !siteId.trim().isEmpty()) {
+                response = alfrescoUserService.listSiteMembers(token, siteId, maxItems, skipCount);
+            } else if (searchTerm != null && !searchTerm.trim().isEmpty()) {
+                response = alfrescoUserService.searchUsers(token, searchTerm, maxItems, skipCount);
+            } else {
+                response = alfrescoUserService.listUsers(token, maxItems, skipCount);
+            }
 
-        if (response.getUsers() != null && !response.getUsers().isEmpty()) {
-            log.info("Listado de usuarios exitoso: {} usuarios", response.getUsers().size());
+            if (response.getUsers() != null && !response.getUsers().isEmpty()) {
+                log.info("Listado de usuarios exitoso: {} usuarios", response.getUsers().size());
+            }
             return ResponseEntity.ok(response);
-        } else {
-            log.warn("No se encontraron usuarios o error en la petición");
-            return ResponseEntity.ok(response); // Devolver lista vacía con 200 OK
+
+        } catch (HttpClientErrorException e) {
+            log.warn("Acceso denegado por Alfresco al listar usuarios: {}", e.getStatusCode());
+            return ResponseEntity.status(e.getStatusCode()).body(new UserListResponse());
         }
     }
 
@@ -139,6 +144,34 @@ public class UserController {
         String token = authHeader.substring(6);
 
         GroupListResponse response = alfrescoUserService.getPersonGroups(token, userId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Endpoint para obtener los sitios (unidades) a los que pertenece un usuario, con su rol en cada uno.
+     *
+     * GET /api/users/{userId}/sites
+     * Header: Authorization: Basic {token}
+     *
+     * @param authHeader Header de autorización
+     * @param userId     ID del usuario
+     * @return UserSiteMembershipListResponse con los sitios y roles del usuario
+     */
+    @GetMapping("/{userId}/sites")
+    public ResponseEntity<UserSiteMembershipListResponse> getUserSites(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId) {
+        log.info("Solicitud de sitios para usuario: {}", userId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            log.warn("Solicitud sin header de autorización válido");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new UserSiteMembershipListResponse());
+        }
+
+        String token = authHeader.substring(6);
+
+        UserSiteMembershipListResponse response = alfrescoUserService.getUserSites(token, userId);
         return ResponseEntity.ok(response);
     }
 }

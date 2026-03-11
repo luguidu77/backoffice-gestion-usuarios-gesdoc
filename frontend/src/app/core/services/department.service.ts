@@ -1,7 +1,11 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { DepartmentListResponse } from '../models/department.model';
+import {
+    DepartmentListResponse,
+    NodePermissionsResponse,
+    UpdateNodePermissionsRequest
+} from '../models/department.model';
 
 @Injectable({
     providedIn: 'root'
@@ -13,11 +17,6 @@ export class DepartmentService {
 
     /**
      * Obtiene la lista de departamentos de una unidad.
-     * 
-     * @param siteId ID de la unidad
-     * @param maxItems Número máximo a obtener
-     * @param skipCount Número a omitir (para paginación)
-     * @returns Observable con la lista
      */
     getDepartments(
         siteId: string,
@@ -33,4 +32,26 @@ export class DepartmentService {
             { params }
         );
     }
+
+    /**
+     * Obtiene los permisos actuales de un nodo (local y heredados).
+     */
+    getNodePermissions(nodeId: string): Observable<NodePermissionsResponse> {
+        return this.http.get<NodePermissionsResponse>(`${this.API_URL}/${nodeId}/permissions`);
+    }
+
+    /**
+     * Actualiza los permisos de un nodo.
+     * Puede cambiar la herencia y/o reemplazar la lista de permisos locales.
+     */
+    updateNodePermissions(
+        nodeId: string,
+        request: UpdateNodePermissionsRequest
+    ): Observable<NodePermissionsResponse> {
+        return this.http.put<NodePermissionsResponse>(
+            `${this.API_URL}/${nodeId}/permissions`,
+            request
+        );
+    }
 }
+

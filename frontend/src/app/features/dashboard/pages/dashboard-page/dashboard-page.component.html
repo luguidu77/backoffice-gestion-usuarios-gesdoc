@@ -8,6 +8,50 @@
   <div class="cards-grid">
 
     <!-- ============================================================
+         TARJETA 0: Bienvenida y rol del usuario
+         ============================================================ -->
+    <div class="card card-welcome">
+      <div class="card-header">
+        <span class="card-icon" aria-hidden="true">&#128100;</span>
+        <h2>Bienvenido, {{ user?.firstName || user?.username }}</h2>
+      </div>
+      <div class="card-body">
+        <div class="role-info">
+          <span class="role-badge"
+            [class.role-global]="userRole === 'GLOBAL_ADMIN'"
+            [class.role-unit]="userRole === 'UNIT_ADMIN'"
+            [class.role-readonly]="userRole === 'READ_ONLY'">
+            @if (userRole === 'GLOBAL_ADMIN') { &#9733; Administrador Global }
+            @else if (userRole === 'UNIT_ADMIN') { &#128218; Administrador de Unidad }
+            @else { &#128274; Solo lectura }
+          </span>
+        </div>
+
+        <!-- Accesos rápidos según rol -->
+        @if (userRole === 'GLOBAL_ADMIN') {
+          <p class="role-description">Acceso completo al sistema. Puedes gestionar usuarios, grupos y todas las unidades.</p>
+          <div class="quick-links">
+            <a routerLink="/users" class="quick-link">&#128101; Gestión de usuarios</a>
+            <a routerLink="/unidades" class="quick-link">&#128194; Gestión de unidades</a>
+            <a routerLink="/groups" class="quick-link">&#128737; Gestión de grupos</a>
+          </div>
+        }
+        @else if (userRole === 'UNIT_ADMIN') {
+          <p class="role-description">
+            Gestionas <strong>{{ managedSiteIds.length }}</strong>
+            {{ managedSiteIds.length === 1 ? 'unidad' : 'unidades' }}.
+          </p>
+          <div class="quick-links">
+            <a routerLink="/unidades" class="quick-link">&#128194; Ver mis unidades</a>
+          </div>
+        }
+        @else {
+          <p class="role-description">Tu cuenta no tiene permisos de administración en este panel. Contacta con un administrador si crees que esto es un error.</p>
+        }
+      </div>
+    </div>
+
+    <!-- ============================================================
          TARJETA 1: Estado del backend Spring Boot
          ============================================================ -->
     <div class="card">
@@ -18,7 +62,6 @@
       <div class="card-body">
         <p class="status-label">Respuesta de <code>GET /ping</code>:</p>
 
-        <!-- Sintaxis @if / @else de Angular 17 (nueva control flow API) -->
         @if (pingLoading()) {
           <app-loading-spinner />
         } @else if (pingError()) {
@@ -36,8 +79,6 @@
         </button>
       </div>
     </div>
-
-
 
   </div>
 </div>

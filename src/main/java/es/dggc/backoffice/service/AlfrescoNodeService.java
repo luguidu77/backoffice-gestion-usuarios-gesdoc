@@ -1,8 +1,13 @@
 package es.dggc.backoffice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import es.dggc.backoffice.config.AlfrescoProperties;
 import es.dggc.backoffice.model.dto.AlfrescoNodeListResponse;
+import es.dggc.backoffice.model.dto.AlfrescoNodeSingleResponse;
 import es.dggc.backoffice.model.dto.DepartmentListResponse;
+import es.dggc.backoffice.model.dto.NodePermissionsResponse;
+import es.dggc.backoffice.model.dto.NodePermissionsResponse.PermissionEntry;
+import es.dggc.backoffice.model.dto.UpdateNodePermissionsRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
@@ -11,7 +16,9 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -116,5 +123,124 @@ public class AlfrescoNodeService {
             log.error("Error inesperado al obtener departamentos del sitio {}: {}", siteId, e.getMessage(), e);
             return new DepartmentListResponse(new ArrayList<>(), 0, false);
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // GESTIÓN DE PERMISOS
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Obtiene los permisos actuales de un nodo (locales y heredados).
+     * GET /nodes/{nodeId}?include=permissions
+     */
+    public NodePermissionsResponse getNodePermissions(String basicAuthToken, String nodeId) {
+        try {
+            log.info("Obteniendo permisos del nodo {}", nodeId);
+
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/nodes/" + nodeId + "?include=permissions";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+
+            ResponseEntity<AlfrescoNodeSingleResponse> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), AlfrescoNodeSingleResponse.class);
+
+            if (response.getBody() != null && response.getBody().getEntry() != null) {
+                AlfrescoNodeListResponse.NodeEntry node = response.getBody().getEntry();
+                AlfrescoNodeListResponse.PermissionsInfo perms = node.getPermissions();
+
+                boolean inherits = perms == null || perms.isInheritanceEnabled();
+                List<PermissionEntry> locallySet = mapPermissions(perms != null ? perms.getLocallySet() : null);
+                List<PermissionEntry> inherited = mapPermissions(perms != null ? perms.getInherited() : null);
+
+                return new NodePermissionsResponse(node.getId(), node.getName(), inherits, locallySet, inherited);
+            }
+
+            return new NodePermissionsResponse(nodeId, nodeId, true, new ArrayList<>(), new ArrayList<>());
+        } catch (HttpClientErrorException e) {
+            log.error("Error HTTP al obtener permisos del nodo {}: {}", nodeId, e.getMessage());
+            return new NodePermissionsResponse(nodeId, nodeId, true, new ArrayList<>(), new ArrayList<>());
+        } catch (Exception e) {
+            log.error("Error al obtener permisos del nodo {}: {}", nodeId, e.getMessage(), e);
+            return new NodePermissionsResponse(nodeId, nodeId, true, new ArrayList<>(), new ArrayList<>());
+        }
+    }
+
+    /**
+     * Actualiza los permisos de un nodo.
+     * Reemplaza el array completo de permisos locales y/o actualiza la herencia.
+     * PUT /nodes/{nodeId}
+     */
+    public NodePermissionsResponse updateNodePermissions(String basicAuthToken, String nodeId,
+            UpdateNodePermissionsRequest request) {
+        try {
+            log.info("Actualizando permisos del nodo {} (inheritance={})", nodeId, request.getIsInheritanceEnabled());
+
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/nodes/" + nodeId + "?include=permissions";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            // Construir el body que espera Alfresco
+            Map<String, Object> permissionsBody = new HashMap<>();
+            if (request.getIsInheritanceEnabled() != null) {
+                permissionsBody.put("isInheritanceEnabled", request.getIsInheritanceEnabled());
+            }
+            if (request.getLocallySet() != null) {
+                List<Map<String, String>> locallySet = new ArrayList<>();
+                for (UpdateNodePermissionsRequest.PermissionItem item : request.getLocallySet()) {
+                    Map<String, String> p = new HashMap<>();
+                    p.put("authorityId", item.getAuthorityId());
+                    p.put("name", item.getName());
+                    p.put("accessStatus", item.getAccessStatus());
+                    locallySet.add(p);
+                }
+                permissionsBody.put("locallySet", locallySet);
+            }
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("permissions", permissionsBody);
+
+            ResponseEntity<AlfrescoNodeSingleResponse> response = restTemplate.exchange(
+                    url, HttpMethod.PUT, new HttpEntity<>(body, headers), AlfrescoNodeSingleResponse.class);
+
+            if (response.getBody() != null && response.getBody().getEntry() != null) {
+                AlfrescoNodeListResponse.NodeEntry node = response.getBody().getEntry();
+                AlfrescoNodeListResponse.PermissionsInfo perms = node.getPermissions();
+
+                boolean inherits = perms == null || perms.isInheritanceEnabled();
+                List<PermissionEntry> locallySet = mapPermissions(perms != null ? perms.getLocallySet() : null);
+                List<PermissionEntry> inherited = mapPermissions(perms != null ? perms.getInherited() : null);
+
+                return new NodePermissionsResponse(node.getId(), node.getName(), inherits, locallySet, inherited);
+            }
+
+            // Si la actualización fue correcta pero sin cuerpo, releer
+            return getNodePermissions(basicAuthToken, nodeId);
+
+        } catch (HttpClientErrorException e) {
+            log.error("Error HTTP al actualizar permisos del nodo {}: {} - {}", nodeId, e.getStatusCode(), e.getMessage());
+            throw new RuntimeException("Error al actualizar permisos: " + e.getResponseBodyAsString(), e);
+        } catch (Exception e) {
+            log.error("Error al actualizar permisos del nodo {}: {}", nodeId, e.getMessage(), e);
+            throw new RuntimeException("Error al actualizar permisos del nodo", e);
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private List<PermissionEntry> mapPermissions(List<AlfrescoNodeListResponse.PermissionElement> raw) {
+        if (raw == null) return new ArrayList<>();
+        return raw.stream().map(p -> {
+            String authorityId = p.getAuthorityId();
+            String type = authorityId != null && authorityId.startsWith("GROUP_") ? "GROUP" : "USER";
+            // Nombre legible: quitar prefijo GROUP_ si existe
+            String displayName = authorityId != null && authorityId.startsWith("GROUP_")
+                    ? authorityId.substring(6) : authorityId;
+            return new PermissionEntry(authorityId, displayName, type, p.getName(), p.getAccessStatus());
+        }).collect(Collectors.toList());
     }
 }

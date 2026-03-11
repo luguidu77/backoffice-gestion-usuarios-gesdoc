@@ -1,23 +1,59 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SiteService } from '../../../../core/services/site.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { Site } from '../../../../core/models/site.model';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
 @Component({
   selector: 'app-unidades-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './unidades-page.component.html',
   styleUrl: './unidades-page.component.scss'
 })
-export class UnidadesPageComponent implements OnInit {
+export class UnidadesPageComponent implements OnInit, OnDestroy {
   sites = signal<Site[]>([]);
   loading = signal<boolean>(false);
   error = signal<string>('');
   totalSites = signal<number>(0);
   hasMore = signal<boolean>(false);
+  searchTerm = signal<string>('');
+
+  /** Rol del usuario en sesión */
+  readonly userRole = this.authService.getUserRole();
+
+  /**
+   * Lista de sitios visible para el usuario:
+   *   - GLOBAL_ADMIN → todos los sitios cargados
+   *   - UNIT_ADMIN   → solo los sitios donde es SiteManager
+   * Además aplica el filtro de texto del buscador.
+   */
+  filteredSites = computed(() => {
+    const role = this.userRole;
+    const managedIds = this.authService.getManagedSiteIds();
+
+    // Limitar al scope del UNIT_ADMIN
+    let base = this.sites();
+    if (role === 'UNIT_ADMIN') {
+      base = base.filter(s => managedIds.includes(s.id));
+    }
+
+    // Filtro de texto
+    const term = this.searchTerm().toLowerCase();
+    if (!term) return base;
+    return base.filter(s =>
+      s.id?.toLowerCase().includes(term) ||
+      s.title?.toLowerCase().includes(term) ||
+      s.description?.toLowerCase().includes(term)
+    );
+  });
+
+  private searchSubject = new Subject<string>();
+  private searchSubscription?: Subscription;
 
   constructor(
     private siteService: SiteService,
@@ -26,6 +62,11 @@ export class UnidadesPageComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
+    this.searchSubscription = this.searchSubject.pipe(
+      debounceTime(200),
+      distinctUntilChanged()
+    ).subscribe(term => this.searchTerm.set(term));
+
     this.loadSites();
   }
 
@@ -49,6 +90,14 @@ export class UnidadesPageComponent implements OnInit {
         this.loading.set(false);
       }
     });
+  }
+
+  onSearchInput(value: string): void {
+    this.searchSubject.next(value);
+  }
+
+  ngOnDestroy(): void {
+    this.searchSubscription?.unsubscribe();
   }
 
   /**
@@ -85,11 +134,11 @@ export class UnidadesPageComponent implements OnInit {
   }
 
   /**
-   * Determina si el usuario actual tiene permisos de administración elevados sobre las unidades.
+   * Determina si el usuario actual puede gestionar unidades.
+   * GLOBAL_ADMIN y UNIT_ADMIN tienen acceso; a READ_ONLY no debería llegarle esta página.
    */
   canManageUnit(): boolean {
-    const user = this.authService.getUserData();
-    return user?.isGlobalAdmin === true;
+    return this.userRole === 'GLOBAL_ADMIN' || this.userRole === 'UNIT_ADMIN';
   }
 
   /**

@@ -5,10 +5,13 @@ import es.dggc.backoffice.model.dto.AlfrescoPersonResponse;
 import es.dggc.backoffice.model.dto.AlfrescoPeopleListResponse;
 import es.dggc.backoffice.model.dto.AlfrescoSiteMembersListResponse;
 import es.dggc.backoffice.model.dto.AlfrescoGroupListResponse;
+import es.dggc.backoffice.model.dto.AlfrescoUserSiteListResponse;
 import es.dggc.backoffice.model.dto.UserListResponse;
 import es.dggc.backoffice.model.dto.GroupListResponse;
 import es.dggc.backoffice.model.dto.GroupListResponse.GroupDto;
 import es.dggc.backoffice.model.dto.UserListResponse.UserDto;
+import es.dggc.backoffice.model.dto.UserSiteMembershipListResponse;
+import es.dggc.backoffice.model.dto.UserSiteMembershipListResponse.UserSiteMembershipDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
@@ -119,6 +122,11 @@ public class AlfrescoUserService {
             return new UserListResponse(new ArrayList<>(), 0, false);
 
         } catch (HttpClientErrorException e) {
+            // Propagar 401/403 al controlador para que el frontend reciba el error correcto
+            if (e.getStatusCode() == HttpStatus.FORBIDDEN
+                    || e.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                throw e;
+            }
             log.error("Error HTTP al obtener usuarios: {} - {}", e.getStatusCode(), e.getMessage());
             return new UserListResponse(new ArrayList<>(), 0, false);
         } catch (Exception e) {
@@ -209,7 +217,7 @@ public class AlfrescoUserService {
             log.info("Buscando usuarios con término '{}' (maxItems={}, skipCount={})", term, maxItems, skipCount);
 
             String url = alfrescoProperties.getBaseUrl() +
-                    "/api/-default-/public/alfresco/versions/1/queries/people?term=" + term;
+                    "/api/-default-/public/alfresco/versions/1/queries/people?term=" + term.trim().toUpperCase();
 
             if (maxItems != null)
                 url += "&maxItems=" + maxItems;
@@ -305,6 +313,64 @@ public class AlfrescoUserService {
         } catch (Exception e) {
             log.error("Error al obtener los grupos del usuario {}: {}", userId, e.getMessage());
             return new GroupListResponse(new ArrayList<>(), 0);
+        }
+    }
+
+    /**
+     * Obtiene los sitios a los que pertenece un usuario, junto con su rol en cada uno.
+     * Llama a GET /people/{userId}/sites de la API de Alfresco.
+     *
+     * @param basicAuthToken Token Basic Auth (Base64 de username:password)
+     * @param userId         ID del usuario
+     * @return UserSiteMembershipListResponse con los sitios y roles del usuario
+     */
+    public UserSiteMembershipListResponse getUserSites(String basicAuthToken, String userId) {
+        try {
+            log.info("Obteniendo sitios del usuario {}", userId);
+
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/people/" + userId + "/sites?maxItems=500&skipCount=0";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<AlfrescoUserSiteListResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    AlfrescoUserSiteListResponse.class);
+
+            if (response.getBody() != null && response.getBody().getList() != null
+                    && response.getBody().getList().getEntries() != null) {
+
+                List<UserSiteMembershipDto> memberships = response.getBody().getList().getEntries().stream()
+                        .map(wrapper -> {
+                            AlfrescoUserSiteListResponse.UserSiteEntry entry = wrapper.getEntry();
+                            String siteId = entry.getSite() != null ? entry.getSite().getId() : entry.getId();
+                            String siteTitle = entry.getSite() != null
+                                    ? (entry.getSite().getDescription() != null && !entry.getSite().getDescription().isBlank()
+                                            ? entry.getSite().getDescription()
+                                            : (entry.getSite().getTitle() != null && !entry.getSite().getTitle().isBlank()
+                                                    ? entry.getSite().getTitle()
+                                                    : siteId))
+                                    : siteId;
+                            String visibility = entry.getSite() != null
+                                    ? entry.getSite().getVisibility()
+                                    : null;
+                            return new UserSiteMembershipDto(siteId, siteTitle, entry.getRole(), visibility);
+                        })
+                        .collect(Collectors.toList());
+
+                return new UserSiteMembershipListResponse(memberships, memberships.size());
+            }
+
+            return new UserSiteMembershipListResponse(new ArrayList<>(), 0);
+        } catch (Exception e) {
+            log.error("Error al obtener los sitios del usuario {}: {}", userId, e.getMessage());
+            return new UserSiteMembershipListResponse(new ArrayList<>(), 0);
         }
     }
 }

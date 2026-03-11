@@ -15,7 +15,6 @@
         visibility: visible;
     }
 }
-
 .drawer-panel {
     position: fixed;
     top: 0;
@@ -59,7 +58,7 @@
             justify-content: center;
             font-size: 1.25rem;
             font-weight: 600;
-            box-shadow: 0 4px 12px rgba(var(--primary-color-rgb), 0.3);
+            box-shadow: 0 4px 12px rgba(44, 82, 130, 0.3);
         }
 
         h3 {
@@ -93,8 +92,8 @@
         transition: background-color 0.2s, color 0.2s;
 
         &:hover {
-            background-color: rgba(var(--danger-color-rgb), 0.1);
-            color: var(--danger-color);
+            background-color: rgba(252, 129, 129, 0.15);
+            color: #e53e3e;
         }
     }
 }
@@ -131,7 +130,7 @@
 
             label {
                 font-size: 0.8rem;
-                color: var(--text-secondary);
+                color: #718096;
             }
 
             span {
@@ -166,12 +165,157 @@
     width: fit-content;
 
     &.active {
-        background-color: rgba(var(--success-color-rgb), 0.1);
-        color: var(--success-color);
+        background-color: rgba(72, 187, 120, 0.12);
+        color: #276749;
     }
 
     &.inactive {
-        background-color: rgba(var(--text-secondary-rgb), 0.1);
-        color: var(--text-secondary);
+        background-color: rgba(113, 128, 150, 0.12);
+        color: #4a5568;
     }
+}
+
+/* ── Lista de unidades (sitios) con roles ── */
+.site-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.site-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    transition: background-color 0.15s;
+
+    &:hover {
+        background-color: #edf2f7;
+    }
+
+    .site-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+
+        .site-icon {
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .site-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #2d3748;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+}
+
+/* ── Badges de rol ── */
+.role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    &.role-manager {
+        background-color: rgba(44, 82, 130, 0.1);
+        color: #2c5282;
+        border: 1px solid rgba(44, 82, 130, 0.25);
+    }
+
+    &.role-collaborator {
+        background-color: rgba(72, 187, 120, 0.1);
+        color: #276749;
+        border: 1px solid rgba(72, 187, 120, 0.25);
+    }
+
+    &.role-contributor {
+        background-color: rgba(246, 173, 85, 0.15);
+        color: #7b4f12;
+        border: 1px solid rgba(246, 173, 85, 0.35);
+    }
+
+    &.role-consumer {
+        background-color: rgba(113, 128, 150, 0.1);
+        color: #4a5568;
+        border: 1px solid rgba(113, 128, 150, 0.25);
+    }
+
+    &.role-other {
+        background-color: #f0f4f8;
+        color: #718096;
+        border: 1px solid #e2e8f0;
+    }
+}
+
+/* ── Lista de grupos ── */
+.group-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #f7fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 0.875rem;
+
+        .group-icon {
+            font-size: 0.9rem;
+        }
+
+        .group-name {
+            color: #2d3748;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+    }
+}
+
+/* ── Estado de carga compacto ── */
+.loading-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    color: #718096;
+    padding: 8px 0;
+
+    .spinner-small {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid #e2e8f0;
+        border-top-color: #2c5282;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+    }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

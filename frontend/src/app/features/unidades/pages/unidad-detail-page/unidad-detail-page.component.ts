@@ -16,6 +16,7 @@ import { DepartmentListComponent } from '../../components/department-list/depart
 })
 export class UnidadDetailPageComponent implements OnInit {
   siteId = signal<string>('');
+  siteName = signal<string>('');
   activeTab = signal<'resumen' | 'departamentos' | 'miembros' | 'ajustes'>('resumen');
 
   isGlobalAdmin = signal<boolean>(false);
@@ -27,13 +28,30 @@ export class UnidadDetailPageComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private authService: AuthService,
-    private userService: UserService
+    private userService: UserService,
+    private siteService: SiteService
   ) { }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
       this.siteId.set(id);
+    }
+
+    // Intentar obtener el nombre del sitio: primero desde query param, luego desde la lista de sitios
+    const nameFromParam = this.route.snapshot.queryParamMap.get('siteName');
+    if (nameFromParam) {
+      this.siteName.set(nameFromParam);
+    } else if (id) {
+      this.siteService.getSites(500, 0).subscribe({
+        next: (resp) => {
+          const match = resp.sites.find(s => s.id === id);
+          if (match) {
+            this.siteName.set(match.description || match.title || id);
+          }
+        },
+        error: () => { /* fallback: mostrar siteId */ }
+      });
     }
 
     const user = this.authService.getUserData();

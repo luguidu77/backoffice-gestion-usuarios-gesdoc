@@ -12,13 +12,16 @@
  *   - OnInit      → ciclo de vida: se ejecuta una vez al montar el componente
  */
 import { Component, OnInit, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../../../../core/services/api.service';
+import { AuthService } from '../../../../core/services/auth.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
-  imports: [LoadingSpinnerComponent],
+  imports: [CommonModule, RouterLink, LoadingSpinnerComponent],
   templateUrl: './dashboard-page.component.html',
   styleUrl: './dashboard-page.component.scss'
 })
@@ -37,7 +40,12 @@ export class DashboardPageComponent implements OnInit {
   /** Indica si la última petición falló */
   pingError = signal<boolean>(false);
 
-  constructor(private apiService: ApiService) {}
+  /** Datos del usuario en sesión */
+  get user() { return this.authService.getUserData(); }
+  get userRole() { return this.authService.getUserRole(); }
+  get managedSiteIds() { return this.authService.getManagedSiteIds(); }
+
+  constructor(private apiService: ApiService, private authService: AuthService) {}
 
   /**
    * ngOnInit se ejecuta justo después de que Angular crea el componente.

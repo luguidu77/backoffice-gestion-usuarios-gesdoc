@@ -10,11 +10,12 @@ cd /d "%ROOT%"
 
 echo.
 echo [1/2] Iniciando Backend (Spring Boot)...
-echo Abriendo una nueva ventana para el Backend...
-start "Backend - Spring Boot" cmd /c "mvn spring-boot:run -Dspring-boot.run.profiles=local & pause"
+echo Compilando y arrancando el Backend en ventana separada...
+start "Backend - Spring Boot" cmd /k "cd /d "%ROOT%" && mvn spring-boot:run -Dspring-boot.run.profiles=local"
 
-:: Pequeña pausa para asegurar que el backend empieza a arrancar
-timeout /t 5 /nobreak >nul
+:: Pausa para que el backend (Spring Boot ~8085) termine de arrancar
+echo Esperando a que el backend arranque (15 segundos)...
+timeout /t 15 /nobreak >nul
 
 echo.
 echo [2/2] Iniciando Frontend (Angular)...

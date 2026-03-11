@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { User, UserListResponse, GroupListResponse } from '../models/user.model';
+import { User, UserListResponse, GroupListResponse, UserSiteMembershipListResponse } from '../models/user.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -60,5 +60,15 @@ export class UserService {
    */
   getUserGroups(userId: string): Observable<GroupListResponse> {
     return this.http.get<GroupListResponse>(`${this.apiUrl}/${userId}/groups`);
+  }
+
+  /**
+   * Obtiene las unidades (sitios) a las que pertenece un usuario, con su rol en cada una.
+   *
+   * @param userId ID del usuario
+   * @returns Observable con las membresías de sitio del usuario
+   */
+  getUserSites(userId: string): Observable<UserSiteMembershipListResponse> {
+    return this.http.get<UserSiteMembershipListResponse>(`${this.apiUrl}/${userId}/sites`);
   }
 }

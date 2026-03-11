@@ -1,0 +1,93 @@
+<div class="page-container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="header-text">
+            <h2>👥 Gestión de Grupos</h2>
+            <p>Visualiza y administra los grupos de Alfresco y sus miembros.</p>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="search-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text"
+                class="search-input"
+                placeholder="Buscar grupo por nombre o ID..."
+                [value]="searchTerm()"
+                (input)="searchTerm.set($any($event.target).value)" />
+        </div>
+        <label class="checkbox-label">
+            <input type="checkbox" [checked]="onlyRoot()" (change)="onOnlyRootChange($event)" />
+            Solo grupos raíz
+        </label>
+        <button class="btn-refresh" (click)="loadGroups()" [disabled]="loading()">🔄 Actualizar</button>
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="loading()" class="loading-state">
+        <div class="spinner"></div>
+        <p>Cargando grupos...</p>
+    </div>
+
+    <!-- Error -->
+    <div *ngIf="error() && !loading()" class="error-message">
+        <span>⚠️</span> {{ error() }}
+        <button class="btn-retry" (click)="loadGroups()">Reintentar</button>
+    </div>
+
+    <!-- Groups Table -->
+    <div class="table-container" *ngIf="!loading() && !error()">
+        <table class="groups-table" *ngIf="filteredGroups().length > 0">
+            <thead>
+                <tr>
+                    <th>Grupo</th>
+                    <th>ID Técnico</th>
+                    <th>Tipo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let group of filteredGroups()" (click)="openGroupDrawer(group)" class="clickable-row">
+                    <td class="group-name-cell">
+                        <span class="group-icon">👥</span>
+                        <span class="group-display-name">{{ group.displayName }}</span>
+                    </td>
+                    <td class="group-id-cell">
+                        <code>{{ group.id }}</code>
+                    </td>
+                    <td>
+                        <span class="badge" [class.root]="group.isRoot" [class.sub]="!group.isRoot">
+                            {{ group.isRoot ? 'Raíz' : 'Sub-grupo' }}
+                        </span>
+                    </td>
+                    <td class="actions-cell">
+                        <button class="btn-icon" (click)="openGroupDrawer(group); $event.stopPropagation()" title="Ver miembros">
+                            👁️ Ver miembros
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Empty state -->
+        <div *ngIf="filteredGroups().length === 0" class="empty-state">
+            <div class="empty-icon">👥</div>
+            <h4>Sin grupos encontrados</h4>
+            <p *ngIf="searchTerm()">No hay grupos que coincidan con "{{ searchTerm() }}".</p>
+            <p *ngIf="!searchTerm()">No existen grupos en el sistema.</p>
+        </div>
+
+        <!-- Counter -->
+        <div class="table-footer" *ngIf="filteredGroups().length > 0">
+            Mostrando {{ filteredGroups().length }} de {{ groups().length }} grupos
+        </div>
+    </div>
+</div>
+
+<!-- Group Detail Drawer -->
+<app-group-detail-drawer
+    [group]="selectedGroup()"
+    [isOpen]="isDrawerOpen()"
+    (closeDrawer)="closeGroupDrawer()">
+</app-group-detail-drawer>

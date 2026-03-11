@@ -45,7 +45,7 @@
                         </span>
                     </td>
                     <td class="actions-cell" *ngIf="isGlobalAdmin">
-                        <button class="btn-icon" title="Editar Permisos">🔐</button>
+                        <button class="btn-icon" title="Editar Permisos" (click)="openPermissionsDrawer(dept)">🔐</button>
                         <button class="btn-icon" title="Renombrar">✏️</button>
                         <button class="btn-icon danger" title="Eliminar">🗑️</button>
                     </td>
@@ -62,3 +62,12 @@
         </div>
     </div>
 </div>
+
+<!-- Permissions Drawer -->
+<app-department-permissions-drawer
+    [isOpen]="isPermissionsDrawerOpen()"
+    [nodeId]="selectedNodeId()"
+    [nodeName]="selectedNodeName()"
+    (closeDrawer)="closePermissionsDrawer()"
+    (permissionsUpdated)="onPermissionsUpdated()">
+</app-department-permissions-drawer>

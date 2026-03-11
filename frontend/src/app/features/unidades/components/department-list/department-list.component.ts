@@ -2,11 +2,12 @@ import { Component, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DepartmentService } from '../../../../core/services/department.service';
 import { Department } from '../../../../core/models/department.model';
+import { DepartmentPermissionsDrawerComponent } from '../department-permissions-drawer/department-permissions-drawer.component';
 
 @Component({
   selector: 'app-department-list',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, DepartmentPermissionsDrawerComponent],
   templateUrl: './department-list.component.html',
   styleUrl: './department-list.component.scss'
 })
@@ -17,6 +18,11 @@ export class DepartmentListComponent implements OnInit {
   departments = signal<Department[]>([]);
   loading = signal<boolean>(false);
   error = signal<string>('');
+
+  // Permissions drawer state
+  isPermissionsDrawerOpen = signal(false);
+  selectedNodeId = signal<string | null>(null);
+  selectedNodeName = signal('');
 
   constructor(private departmentService: DepartmentService) { }
 
@@ -44,6 +50,21 @@ export class DepartmentListComponent implements OnInit {
   }
 
   refresh(): void {
+    this.loadDepartments();
+  }
+
+  openPermissionsDrawer(dept: Department): void {
+    this.selectedNodeId.set(dept.id);
+    this.selectedNodeName.set(dept.name);
+    this.isPermissionsDrawerOpen.set(true);
+  }
+
+  closePermissionsDrawer(): void {
+    this.isPermissionsDrawerOpen.set(false);
+    this.selectedNodeId.set(null);
+  }
+
+  onPermissionsUpdated(): void {
     this.loadDepartments();
   }
 }

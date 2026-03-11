@@ -1,10 +1,12 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { UserService } from '../../../../core/services/user.service';
 import { User } from '../../../../core/models/user.model';
 import { FormsModule } from '@angular/forms';
 import { UserDetailDrawerComponent } from '../../components/user-detail-drawer/user-detail-drawer.component';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
 @Component({
   selector: 'app-user-list-page',
@@ -13,7 +15,7 @@ import { UserDetailDrawerComponent } from '../../components/user-detail-drawer/u
   templateUrl: './user-list-page.component.html',
   styleUrls: ['./user-list-page.component.scss']
 })
-export class UserListPageComponent implements OnInit {
+export class UserListPageComponent implements OnInit, OnDestroy {
   users = signal<User[]>([]);
   loading = signal<boolean>(false);
   error = signal<string>('');
@@ -29,6 +31,9 @@ export class UserListPageComponent implements OnInit {
   selectedUser = signal<User | null>(null);
   isDrawerOpen = signal<boolean>(false);
 
+  private searchSubject = new Subject<string>();
+  private searchSubscription?: Subscription;
+
   constructor(
     private userService: UserService,
     private router: Router,
@@ -36,6 +41,11 @@ export class UserListPageComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
+    this.searchSubscription = this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(() => this.loadUsers());
+
     // Escuchar cambios en los queryParams (para filtrado por sitio)
     this.route.queryParams.subscribe(params => {
       const siteId = params['siteId'];
@@ -74,10 +84,24 @@ export class UserListPageComponent implements OnInit {
   }
 
   /**
+   * Manejador de input en tiempo real: dispara búsqueda a partir del 3er carácter.
+   */
+  onSearchInput(value: string): void {
+    this.searchTerm.set(value);
+    if (value.length >= 3 || value.length === 0) {
+      this.searchSubject.next(value);
+    }
+  }
+
+  /**
    * Ejecuta la búsqueda de usuarios.
    */
   onSearch(): void {
     this.loadUsers();
+  }
+
+  ngOnDestroy(): void {
+    this.searchSubscription?.unsubscribe();
   }
 
   /**
