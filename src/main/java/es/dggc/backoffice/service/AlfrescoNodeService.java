@@ -1,6 +1,5 @@
 package es.dggc.backoffice.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import es.dggc.backoffice.config.AlfrescoProperties;
 import es.dggc.backoffice.model.dto.AlfrescoNodeListResponse;
 import es.dggc.backoffice.model.dto.AlfrescoNodeSingleResponse;
@@ -76,12 +75,13 @@ public class AlfrescoNodeService {
             ResponseEntity<AlfrescoNodeListResponse> response = restTemplate.exchange(
                     url, HttpMethod.GET, entity, AlfrescoNodeListResponse.class);
 
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                AlfrescoNodeListResponse alfrescoResponse = response.getBody();
+            AlfrescoNodeListResponse alfrescoResponse = response.getBody();
+            if (response.getStatusCode() == HttpStatus.OK && alfrescoResponse != null) {
                 List<DepartmentListResponse.DepartmentDto> departments = new ArrayList<>();
 
                 if (alfrescoResponse.getList() != null && alfrescoResponse.getList().getEntries() != null) {
                     departments = alfrescoResponse.getList().getEntries().stream()
+                            .filter(wrapper -> wrapper.getEntry() != null)
                             .map(wrapper -> {
                                 AlfrescoNodeListResponse.NodeEntry node = wrapper.getEntry();
 
@@ -146,8 +146,9 @@ public class AlfrescoNodeService {
             ResponseEntity<AlfrescoNodeSingleResponse> response = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(headers), AlfrescoNodeSingleResponse.class);
 
-            if (response.getBody() != null && response.getBody().getEntry() != null) {
-                AlfrescoNodeListResponse.NodeEntry node = response.getBody().getEntry();
+            AlfrescoNodeSingleResponse nodeBody = response.getBody();
+            if (nodeBody != null && nodeBody.getEntry() != null) {
+                AlfrescoNodeListResponse.NodeEntry node = nodeBody.getEntry();
                 AlfrescoNodeListResponse.PermissionsInfo perms = node.getPermissions();
 
                 boolean inherits = perms == null || perms.isInheritanceEnabled();
@@ -207,8 +208,9 @@ public class AlfrescoNodeService {
             ResponseEntity<AlfrescoNodeSingleResponse> response = restTemplate.exchange(
                     url, HttpMethod.PUT, new HttpEntity<>(body, headers), AlfrescoNodeSingleResponse.class);
 
-            if (response.getBody() != null && response.getBody().getEntry() != null) {
-                AlfrescoNodeListResponse.NodeEntry node = response.getBody().getEntry();
+            AlfrescoNodeSingleResponse updatedBody = response.getBody();
+            if (updatedBody != null && updatedBody.getEntry() != null) {
+                AlfrescoNodeListResponse.NodeEntry node = updatedBody.getEntry();
                 AlfrescoNodeListResponse.PermissionsInfo perms = node.getPermissions();
 
                 boolean inherits = perms == null || perms.isInheritanceEnabled();

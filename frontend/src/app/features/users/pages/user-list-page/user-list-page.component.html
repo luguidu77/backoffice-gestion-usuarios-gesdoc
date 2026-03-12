@@ -1,88 +1,637 @@
-<div class="user-list-container">
-  <div class="page-header">
-    <h1>Gestión de Usuarios</h1>
-    <!-- Search and Actions -->
-    <div class="actions-bar">
-      <div class="search-box" [class.searching]="loading()">
-        <span class="search-icon">🔍</span>
-        <input type="text" [ngModel]="searchTerm()" (ngModelChange)="onSearchInput($event)" (keyup.enter)="onSearch()"
-          placeholder="Buscar usuarios por TIP, nombre o email...">
-        <span *ngIf="loading()" class="loading-dot"></span>
-        <button class="btn-search" (click)="onSearch()" [disabled]="loading()">Buscar</button>
+﻿<div class="user-management-page">
+  <header class="page-header">
+    <div>
+      <h1>Gestion de Usuarios</h1>
+      <p>Administra usuarios por estructura o mediante busqueda global.</p>
+    </div>
+    <button class="btn-refresh" (click)="refreshAll()" [disabled]="groupsLoading() || membersLoading() || globalSearching()">
+      Actualizar
+    </button>
+  </header>
+
+  <div class="mode-switch">
+    <button
+      type="button"
+      [class.active]="viewMode() === 'structure'"
+      (click)="switchMode('structure')">
+      Gestion por estructura
+    </button>
+    <button
+      type="button"
+      [class.active]="viewMode() === 'global'"
+      (click)="switchMode('global')">
+      Busqueda global de usuarios
+    </button>
+  </div>
+
+  <div class="role-scope" *ngIf="isUnitAdmin">
+    Modo Administrador de Unidad: solo puedes gestionar tus unidades y no puedes modificar roles.
+  </div>
+
+  <div class="alert success" *ngIf="actionMessage()">{{ actionMessage() }}</div>
+  <div class="alert error" *ngIf="actionError()">{{ actionError() }}</div>
+
+  <ng-container *ngIf="viewMode() === 'structure'; else globalSearchMode">
+    <div class="workspace-grid">
+      <section class="panel departments-panel">
+        <div class="panel-head">
+          <h2>Unidades</h2>
+          <span class="counter">{{ unitMenus().length }}</span>
+        </div>
+
+        <div class="search-box">
+          <input
+            type="text"
+            [ngModel]="groupSearch()"
+            (ngModelChange)="onGroupSearchChange($event)"
+            placeholder="Buscar unidad o departamento" />
+        </div>
+
+        <div class="loading" *ngIf="groupsLoading()">Cargando departamentos...</div>
+        <div class="alert error" *ngIf="groupsError() && !groupsLoading()">{{ groupsError() }}</div>
+
+        <ul class="unit-list" *ngIf="!groupsLoading() && !groupsError() && unitMenus().length > 0">
+          <li class="unit-item" *ngFor="let unit of unitMenus(); trackBy: trackByUnit">
+            <button class="unit-row" type="button" (click)="onUnitClick(unit)">
+              <span class="unit-caret">{{ isUnitExpanded(unit.unitId) ? 'v' : '>' }}</span>
+              <span class="unit-info">
+                <span class="unit-name">{{ unit.unitName }}</span>
+                <span class="unit-meta">{{ unit.departments.length }} departamentos</span>
+              </span>
+            </button>
+
+            <ul class="department-submenu" *ngIf="isUnitExpanded(unit.unitId)">
+              <li
+                *ngFor="let department of unit.departments; trackBy: trackByDepartment"
+                [class.active]="selectedGroupId() === department.id"
+                (click)="selectDepartment(department.id)">
+                <span class="department-name">{{ department.displayName }}</span>
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <div class="empty" *ngIf="!groupsLoading() && !groupsError() && unitMenus().length === 0">
+          No hay unidades/departamentos disponibles para tu alcance.
+        </div>
+      </section>
+
+      <section class="panel users-panel">
+        <ng-container *ngIf="selectedDepartment() as department; else noDepartmentSelected">
+          <div class="panel-head users-head">
+            <div>
+              <h2>Usuarios de {{ department.displayName }}</h2>
+              <p>
+                Unidad: <strong>{{ department.unitName }}</strong>
+                <span class="technical-id">ID tecnico: {{ department.technicalName }}</span>
+              </p>
+            </div>
+            <div class="search-box compact">
+              <input
+                type="text"
+                [ngModel]="memberSearch()"
+                (ngModelChange)="memberSearch.set($event)"
+                placeholder="Filtrar en este departamento" />
+            </div>
+          </div>
+
+          <div class="loading" *ngIf="membersLoading()">Cargando usuarios del departamento...</div>
+          <div class="alert error" *ngIf="membersError() && !membersLoading()">{{ membersError() }}</div>
+
+          <div class="table-wrapper" *ngIf="!membersLoading() && !membersError() && visibleMembers().length > 0">
+            <table>
+              <thead>
+                <tr>
+                  <th>TIP</th>
+                  <th>Nombre</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  class="clickable-row"
+                  *ngFor="let member of visibleMembers(); trackBy: trackByMember"
+                  (click)="openUserActionsDrawer(member, department.unitId, department.unitName)">
+                  <td class="mono">{{ member.id }}</td>
+                  <td>
+                    <div class="name-cell">
+                      <span>{{ getMemberName(member) }}</span>
+                      <span class="role-inline-badge" *ngIf="isMemberUnitAdmin(member.id, department.unitId)">
+                        Admin Unidad
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="empty" *ngIf="!membersLoading() && !membersError() && visibleMembers().length === 0">
+            No hay usuarios en este departamento.
+          </div>
+        </ng-container>
+
+        <ng-template #noDepartmentSelected>
+          <div class="empty big">Selecciona un departamento para ver sus usuarios.</div>
+        </ng-template>
+      </section>
+    </div>
+  </ng-container>
+
+  <ng-template #globalSearchMode>
+    <section class="panel global-search-panel">
+      <div class="panel-head global-search-head">
+        <div>
+          <h2>Busqueda global de usuarios</h2>
+          <p>Busca usuarios y visualiza su sitio y departamentos actuales.</p>
+        </div>
+        <div class="search-box compact global-search-input">
+          <input
+            type="text"
+            [ngModel]="globalSearchTerm()"
+            (ngModelChange)="onGlobalSearchChange($event)"
+            placeholder="Buscar usuario (min. 3 caracteres)" />
+        </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Active Filters -->
-  <div *ngIf="siteId() || searchTerm()" class="active-filters">
-    <div class="filter-chip" *ngIf="siteId()">
-      <span>Filtrado por: <strong>{{ siteName() || siteId() }}</strong></span>
-    </div>
-    <div class="filter-chip" *ngIf="searchTerm()">
-      <span>Buscando: <strong>"{{ searchTerm() }}"</strong></span>
-    </div>
-    <button class="btn-clear" (click)='clearFilters()'>Limpiar filtros</button>
-  </div>
+      <div class="loading" *ngIf="globalSearching()">Buscando usuarios...</div>
+      <div class="alert error" *ngIf="globalSearchError() && !globalSearching()">{{ globalSearchError() }}</div>
 
-  <!-- Error message -->
-  <div *ngIf="error() && !loading()" class="error-message">
-    <span class="icon">⚠️</span>
-    {{ error() }}
-    <button class="btn-retry" (click)="refresh()">Reintentar</button>
-  </div>
+      <div class="table-wrapper" *ngIf="!globalSearching() && !globalSearchError() && globalResults().length > 0">
+        <table>
+          <thead>
+            <tr>
+              <th>TIP</th>
+              <th>Nombre</th>
+              <th>Sitio(s)</th>
+              <th>Departamento(s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              class="clickable-row"
+              *ngFor="let row of globalResults(); trackBy: trackByGlobalUser"
+              (click)="openUserActionsDrawer(row.member, getPrimaryUnitIdForGlobalRow(row), getPrimaryUnitNameForGlobalRow(row))">
+              <td class="mono">{{ row.member.id }}</td>
+              <td>
+                <div class="name-cell">
+                  <span>{{ getMemberName(row.member) }}</span>
+                  <span class="role-inline-badge" *ngIf="row.adminSites.length > 0">Admin Unidad</span>
+                </div>
+                <div class="chips compact" *ngIf="row.adminSites.length > 0">
+                  <span class="chip chip-admin" *ngFor="let adminSite of row.adminSites">Admin: {{ adminSite }}</span>
+                </div>
+              </td>
+              <td>
+                <div class="chips" *ngIf="row.sites.length > 0; else noSites">
+                  <span class="chip" *ngFor="let site of row.sites">{{ site }}</span>
+                </div>
+                <ng-template #noSites><span class="muted">Sin sitio</span></ng-template>
+              </td>
+              <td>
+                <div class="chips" *ngIf="row.departments.length > 0; else noDepartments">
+                  <span class="chip" *ngFor="let dep of row.departments">{{ dep }}</span>
+                </div>
+                <ng-template #noDepartments><span class="muted">Sin departamentos</span></ng-template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-  <!-- User list: siempre presente, opacidad reducida al cargar -->
-  <div class="users-content" [class.content-loading]="loading()">
-    <!-- Summary -->
-    <div class="summary">
-      <p>
-        <strong>Total de usuarios:</strong>
-        <span [class.filtered-count]="siteId() || searchTerm()">{{ totalUsers() }}</span>
-        <span *ngIf="siteId() || searchTerm()" class="filter-info"> (encontrados con filtros)</span>
-        <span *ngIf="hasMore()" class="more-indicator">(hay más usuarios disponibles)</span>
+      <div class="empty" *ngIf="!globalSearching() && !globalSearchError() && globalResults().length === 0">
+        <span *ngIf="globalSearchTerm().trim().length < 3">Introduce al menos 3 caracteres para buscar.</span>
+        <span *ngIf="globalSearchTerm().trim().length >= 3">No se encontraron usuarios.</span>
+      </div>
+    </section>
+  </ng-template>
+
+  <div
+    class="drawer-overlay"
+    *ngIf="isUserActionsOpen() || isReassignOpen() || isUnitReassignOpen()"
+    (click)="closeUserActionsDrawer(); closeReassignDrawer(); closeUnitReassignDrawer()"></div>
+
+  <aside class="drawer drawer-actions" [class.open]="isUserActionsOpen()">
+    <div class="drawer-head">
+      <div>
+        <h3>Acciones de usuario</h3>
+        <p *ngIf="actionMember()">Usuario: <strong>{{ actionMember()?.id }}</strong></p>
+        <p *ngIf="actionContextUnitId()">Unidad de contexto: <strong>{{ actionContextUnitName() }}</strong></p>
+      </div>
+      <button class="btn-close" (click)="closeUserActionsDrawer()">X</button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="action-card-list">
+        <button class="action-card" (click)="openDepartmentReassignmentFromActions()">
+          <strong>Reasignacion de departamentos</strong>
+          <span>Gestiona la pertenencia del usuario a uno o varios departamentos.</span>
+        </button>
+
+        <button class="action-card" (click)="openUnitReassignmentFromActions()">
+          <strong>Reasignacion de Unidad</strong>
+          <span>Mueve o agrega al usuario a otra unidad mediante asistente.</span>
+        </button>
+
+        <button
+          class="action-card action-card-highlight"
+          [disabled]="!canPromoteFromUserActions() || isPromoting(actionMember()?.id || '')"
+          (click)="requestPromoteFromUserActions()">
+          <strong>{{ isPromoting(actionMember()?.id || '') ? 'Asignando...' : 'Asignarlo Administrador de la Unidad' }}</strong>
+          <span>Otorga rol SiteManager en la unidad de contexto.</span>
+        </button>
+      </div>
+
+      <p class="drawer-context" *ngIf="!actionContextUnitId() && isGlobalAdmin">
+        Para asignar Administrador de la Unidad, abre el usuario desde Gestion por estructura.
+      </p>
+      <p class="drawer-context" *ngIf="!isGlobalAdmin">
+        Tu rol no permite asignar Administrador de la Unidad.
       </p>
     </div>
+  </aside>
 
-    <!-- Table -->
-    <div class="table-container">
-      <table class="users-table" *ngIf="users().length > 0">
-        <thead>
-          <tr>
-            <th>TIP</th>
-            <th>Nombre</th>
-            <th>Correo Electrónico</th>
-            <th>Estado</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let user of users()" [class.inactive-row]="!user.enabled">
-            <td class="id-column">{{ user.id }}</td>
-            <td class="name-column">{{ getFullName(user) }}</td>
-            <td class="email-column">{{ user.email || '-' }}</td>
-            <td class="status-column">
-              <span class="status-badge" [ngClass]="getStatusClass(user.enabled)">
-                {{ getStatusText(user.enabled) }}
-              </span>
-            </td>
-            <td class="actions-column">
-              <button class="btn-action btn-view" (click)="viewUser(user)" title="Ver detalles">
-                👁️
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+  <aside class="drawer" [class.open]="isReassignOpen()">
+    <div class="drawer-head">
+      <div>
+        <h3>Reasignacion de departamentos</h3>
+        <p *ngIf="selectedMember()">Usuario: <strong>{{ selectedMember()?.id }}</strong></p>
+      </div>
+      <button class="btn-close" (click)="closeReassignDrawer()">X</button>
+    </div>
 
-      <!-- Empty state -->
-      <div *ngIf="users().length === 0 && !loading()" class="empty-state">
-        <div class="empty-icon">👥</div>
-        <h3>No hay usuarios disponibles</h3>
-        <p>No se encontraron usuarios en el sistema.</p>
+    <div class="drawer-body">
+      <p class="drawer-context" *ngIf="viewMode() === 'structure' && selectedDepartment() as department">
+        Unidad de trabajo: <strong>{{ department.unitName }}</strong>
+      </p>
+      <p class="drawer-context" *ngIf="viewMode() === 'global'">
+        Reasignacion global en todos los departamentos de tu alcance.
+      </p>
+
+      <div class="search-box compact">
+        <input
+          type="text"
+          [ngModel]="reassignSearch()"
+          (ngModelChange)="reassignSearch.set($event)"
+          placeholder="Filtrar grupos" />
+      </div>
+
+      <div class="loading" *ngIf="reassignLoading()">Cargando grupos del usuario...</div>
+      <div class="alert error" *ngIf="reassignError()">{{ reassignError() }}</div>
+
+      <div class="group-checklist" *ngIf="!reassignLoading() && assignableDepartments().length > 0">
+        <label *ngFor="let group of assignableDepartments(); trackBy: trackByDepartment">
+          <input
+            type="checkbox"
+            [checked]="isGroupSelected(group.id)"
+            (change)="toggleGroupSelection(group.id, $any($event.target).checked)" />
+          <span>{{ group.displayName }} ({{ group.unitName }})</span>
+        </label>
+      </div>
+
+      <div class="empty" *ngIf="!reassignLoading() && assignableDepartments().length === 0">
+        No hay grupos disponibles para reasignar.
       </div>
     </div>
-  </div>
 
-  <app-user-detail-drawer [user]="selectedUser()" [isOpen]="isDrawerOpen()" (closeDrawer)="closeUserDrawer()">
-  </app-user-detail-drawer>
+    <div class="drawer-footer">
+      <button class="btn-secondary" (click)="closeReassignDrawer()" [disabled]="reassignSaving()">Cancelar</button>
+      <button class="btn-primary" (click)="saveReassignment()" [disabled]="reassignSaving() || reassignLoading()">
+        {{ reassignSaving() ? 'Guardando...' : 'Guardar cambios' }}
+      </button>
+    </div>
+  </aside>
+
+  <aside class="drawer drawer-wide" [class.open]="isUnitReassignOpen()">
+    <div class="drawer-head">
+      <div>
+        <h3>Reasignacion de Unidad</h3>
+        <p *ngIf="selectedMember()">Usuario: <strong>{{ selectedMember()?.id }}</strong></p>
+      </div>
+      <button class="btn-close" (click)="closeUnitReassignDrawer()">X</button>
+    </div>
+
+    <div class="drawer-body unit-wizard">
+      <div class="wizard-steps">
+        <button
+          type="button"
+          [class.active]="unitWizardStep() === 1"
+          (click)="goToUnitWizardStep(1)">
+          1. Tipo de cambio
+        </button>
+        <button
+          type="button"
+          [class.active]="unitWizardStep() === 2"
+          [disabled]="unitReassignLoading()"
+          (click)="goToUnitWizardStep(2)">
+          2. Unidad de destino
+        </button>
+        <button
+          type="button"
+          [class.active]="unitWizardStep() === 3"
+          [disabled]="!canProceedFromUnitStep2()"
+          (click)="goToUnitWizardStep(3)">
+          3. Departamentos
+        </button>
+        <button
+          type="button"
+          [class.active]="unitWizardStep() === 4"
+          [disabled]="!canProceedFromUnitStep3()"
+          (click)="goToUnitWizardStep(4)">
+          4. Justificante
+        </button>
+      </div>
+
+      <div class="loading" *ngIf="unitReassignLoading()">Cargando unidades del usuario...</div>
+      <div class="alert error" *ngIf="unitReassignError()">{{ unitReassignError() }}</div>
+
+      <ng-container [ngSwitch]="unitWizardStep()">
+        <section class="wizard-step" *ngSwitchCase="1">
+          <p class="drawer-context">Define si quieres trasladar al usuario o agregarlo a otra unidad.</p>
+
+          <div class="mode-selector">
+            <button
+              type="button"
+              class="mode-card"
+              [class.active]="unitReassignMode() === 'TRANSFER'"
+              (click)="selectUnitReassignMode('TRANSFER')">
+              <span class="mode-title">Trasladar de unidad</span>
+              <span class="mode-desc">{{ unitModeDescription('TRANSFER') }}</span>
+            </button>
+            <button
+              type="button"
+              class="mode-card"
+              [class.active]="unitReassignMode() === 'ADD'"
+              (click)="selectUnitReassignMode('ADD')">
+              <span class="mode-title">Agregar unidad adicional</span>
+              <span class="mode-desc">{{ unitModeDescription('ADD') }}</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="wizard-step" *ngSwitchCase="2">
+          <div class="wizard-summary-grid">
+            <article class="summary-card">
+              <h4>Unidades actuales</h4>
+              <div class="chips" *ngIf="currentUnitOptions().length > 0; else noCurrentUnits">
+                <span class="chip" *ngFor="let unit of currentUnitOptions(); trackBy: trackByUnitOption">{{ unit.name }}</span>
+              </div>
+              <ng-template #noCurrentUnits><span class="muted">Sin unidad asignada</span></ng-template>
+            </article>
+
+            <article class="summary-card">
+              <h4>Destino seleccionado</h4>
+              <div class="chips" *ngIf="selectedTargetUnitOptions().length > 0; else noTargetUnits">
+                <span class="chip" *ngFor="let unit of selectedTargetUnitOptions(); trackBy: trackByUnitOption">{{ unit.name }}</span>
+              </div>
+              <ng-template #noTargetUnits><span class="muted">Sin destino seleccionado</span></ng-template>
+            </article>
+
+            <article class="summary-card">
+              <h4>Resultado final</h4>
+              <div class="chips" *ngIf="resultUnitOptions().length > 0; else noFinalUnits">
+                <span class="chip" *ngFor="let unit of resultUnitOptions(); trackBy: trackByUnitOption">{{ unit.name }}</span>
+              </div>
+              <ng-template #noFinalUnits><span class="muted">El usuario quedara sin unidad</span></ng-template>
+            </article>
+          </div>
+
+          <div class="search-box compact">
+            <input
+              type="text"
+              [ngModel]="unitReassignSearch()"
+              (ngModelChange)="unitReassignSearch.set($event)"
+              placeholder="Filtrar unidades" />
+          </div>
+
+          <label class="inline-toggle">
+            <input
+              type="checkbox"
+              [ngModel]="unitShowOnlySelected()"
+              (ngModelChange)="unitShowOnlySelected.set($event)" />
+            Mostrar solo seleccionadas
+          </label>
+
+          <p class="drawer-context" *ngIf="unitReassignMode() === 'TRANSFER'">
+            En traslado solo puedes seleccionar una unidad destino.
+          </p>
+
+          <div class="group-checklist" *ngIf="filteredAvailableUnits().length > 0">
+            <label *ngFor="let unit of filteredAvailableUnits(); trackBy: trackByUnitOption">
+              <input
+                [attr.type]="unitReassignMode() === 'TRANSFER' ? 'radio' : 'checkbox'"
+                [attr.name]="unitReassignMode() === 'TRANSFER' ? 'transfer-target-unit' : null"
+                [checked]="isUnitSelected(unit.id)"
+                (change)="toggleUnitSelection(unit.id, $any($event.target).checked)" />
+              <span>{{ unit.name }}</span>
+            </label>
+          </div>
+
+          <div class="empty" *ngIf="filteredAvailableUnits().length === 0">
+            No hay unidades disponibles con ese filtro.
+          </div>
+        </section>
+
+        <section class="wizard-step" *ngSwitchCase="3">
+          <div class="summary-card">
+            <h4>Unidad(es) destino seleccionada(s)</h4>
+            <div class="chips" *ngIf="selectedTargetUnitOptions().length > 0; else noTargetUnitsForDepartments">
+              <span class="chip" *ngFor="let unit of selectedTargetUnitOptions(); trackBy: trackByUnitOption">{{ unit.name }}</span>
+            </div>
+            <ng-template #noTargetUnitsForDepartments><span class="muted">Sin unidad destino seleccionada.</span></ng-template>
+          </div>
+
+          <div class="department-assignment">
+            <h4>Departamentos del sitio destino</h4>
+
+            <p class="drawer-context" *ngIf="departmentAssignmentUnitIds().length === 0">
+              Selecciona una unidad destino para habilitar los departamentos.
+            </p>
+
+            <ng-container *ngIf="departmentAssignmentUnitIds().length > 0">
+              <div class="department-sections" *ngIf="unitDepartmentSections().length > 0; else noDepartmentsInTargetSites">
+                <article class="summary-card" *ngFor="let section of unitDepartmentSections(); trackBy: trackByUnit">
+                  <h4>{{ section.unitName }}</h4>
+                  <div class="group-checklist">
+                    <label *ngFor="let department of section.departments; trackBy: trackByDepartment">
+                      <input
+                        type="checkbox"
+                        [checked]="isUnitDepartmentSelected(department.id)"
+                        (change)="toggleUnitDepartmentSelection(department.id, $any($event.target).checked)" />
+                      <span>{{ department.displayName }}</span>
+                    </label>
+                  </div>
+                </article>
+              </div>
+
+              <ng-template #noDepartmentsInTargetSites>
+                <p class="drawer-context">No hay departamentos disponibles en el sitio destino.</p>
+              </ng-template>
+            </ng-container>
+
+            <div class="alert error" *ngIf="unitDepartmentError()">{{ unitDepartmentError() }}</div>
+            <div class="alert error" *ngIf="!unitDepartmentError() && unitDepartmentSelectionMessage()">
+              {{ unitDepartmentSelectionMessage() }}
+            </div>
+          </div>
+        </section>
+
+        <section class="wizard-step" *ngSwitchCase="4">
+          <p class="drawer-context">
+            Revisa el resultado y adjunta el PDF justificante para completar la reasignacion.
+          </p>
+
+          <div class="summary-card result-card">
+            <h4>Resumen del cambio</h4>
+            <p><strong>Modo:</strong> {{ getUnitModeLabel(unitReassignMode()) }}</p>
+            <p><strong>Unidades anadidas:</strong> {{ addedUnitOptions().length }}</p>
+            <p><strong>Unidades retiradas:</strong> {{ removedUnitOptions().length }}</p>
+
+            <div class="chips" *ngIf="addedUnitOptions().length > 0">
+              <span class="chip" *ngFor="let unit of addedUnitOptions(); trackBy: trackByUnitOption">+ {{ unit.name }}</span>
+            </div>
+            <div class="chips" *ngIf="removedUnitOptions().length > 0">
+              <span class="chip" *ngFor="let unit of removedUnitOptions(); trackBy: trackByUnitOption">- {{ unit.name }}</span>
+            </div>
+          </div>
+
+          <div class="proof-upload">
+            <label for="unit-proof-file">Justificante PDF *</label>
+            <input
+              id="unit-proof-file"
+              type="file"
+              accept="application/pdf,.pdf"
+              (change)="onUnitProofFileSelected($event)" />
+
+            <div class="proof-file" *ngIf="unitProofFile() as proof">
+              <span>Archivo seleccionado: <strong>{{ proof.name }}</strong></span>
+              <button type="button" class="btn-link" (click)="clearUnitProofFile()">Quitar</button>
+            </div>
+            <div class="alert error" *ngIf="unitProofError()">{{ unitProofError() }}</div>
+          </div>
+        </section>
+      </ng-container>
+    </div>
+
+    <div class="drawer-footer">
+      <button class="btn-secondary" (click)="closeUnitReassignDrawer()" [disabled]="unitReassignSaving()">Cancelar</button>
+      <button
+        class="btn-secondary"
+        *ngIf="unitWizardStep() > 1"
+        (click)="previousUnitWizardStep()"
+        [disabled]="unitReassignSaving()">
+        Anterior
+      </button>
+      <button
+        class="btn-primary"
+        *ngIf="unitWizardStep() < 4"
+        (click)="nextUnitWizardStep()"
+        [disabled]="(unitWizardStep() === 2 && !canProceedFromUnitStep2()) || (unitWizardStep() === 3 && !canProceedFromUnitStep3()) || unitReassignLoading() || unitReassignSaving()">
+        Siguiente
+      </button>
+      <button
+        class="btn-primary"
+        *ngIf="unitWizardStep() === 4"
+        (click)="saveUnitReassignment()"
+        [disabled]="!canSaveUnitWizard()">
+        {{ unitReassignSaving() ? 'Guardando...' : 'Guardar cambios' }}
+      </button>
+    </div>
+  </aside>
+
+  <div class="result-overlay" *ngIf="promoteConfirmOpen()" (click)="closePromoteConfirmDialog()"></div>
+  <section class="result-dialog confirm-dialog" *ngIf="promoteConfirmOpen()">
+    <header>
+      <h3>Confirmar accion</h3>
+      <button class="btn-close" (click)="closePromoteConfirmDialog()">X</button>
+    </header>
+    <div class="result-body">
+      <p>
+        Vas a asignar a <strong>{{ actionMember()?.id }}</strong> como
+        <strong>Administrador de la Unidad {{ actionContextUnitName() }}</strong>.
+      </p>
+      <p>Esta accion modificara sus permisos de gestion en el sitio.</p>
+    </div>
+    <footer>
+      <button class="btn-secondary" (click)="closePromoteConfirmDialog()">Cancelar</button>
+      <button class="btn-primary" (click)="confirmPromoteFromUserActions()" [disabled]="isPromoting(actionMember()?.id || '')">
+        {{ isPromoting(actionMember()?.id || '') ? 'Asignando...' : 'Confirmar' }}
+      </button>
+    </footer>
+  </section>
+
+  <div class="result-overlay" *ngIf="promoteSuccessOpen()" (click)="closePromoteSuccessDialog()"></div>
+  <section class="result-dialog success-dialog" *ngIf="promoteSuccessOpen()">
+    <header>
+      <h3>Cambio aplicado correctamente</h3>
+      <button class="btn-close" (click)="closePromoteSuccessDialog()">X</button>
+    </header>
+    <div class="result-body">
+      <p>{{ promoteSuccessMessage() }}</p>
+    </div>
+    <footer>
+      <button class="btn-primary" (click)="closePromoteSuccessDialog()">Aceptar</button>
+    </footer>
+  </section>
+
+  <div class="result-overlay" *ngIf="unitResultDialogOpen()" (click)="closeUnitResultDialog()"></div>
+  <section class="result-dialog" *ngIf="unitResultDialogOpen() && unitResult() as result">
+    <header>
+      <h3>Cambio aplicado correctamente</h3>
+      <button class="btn-close" (click)="closeUnitResultDialog()">X</button>
+    </header>
+
+    <div class="result-body">
+      <p><strong>Usuario:</strong> {{ result.userId }}</p>
+      <p><strong>Modo:</strong> {{ getUnitModeLabel(result.mode) }}</p>
+      <p><strong>PDF justificante:</strong> {{ result.proofFileName }}</p>
+
+      <div class="result-block">
+        <h4>Unidades finales</h4>
+        <div class="chips" *ngIf="result.finalUnits.length > 0; else noResultUnits">
+          <span class="chip" *ngFor="let unit of result.finalUnits; trackBy: trackByUnitOption">{{ unit.name }}</span>
+        </div>
+        <ng-template #noResultUnits><span class="muted">Sin unidades asignadas.</span></ng-template>
+      </div>
+
+      <div class="result-block" *ngIf="result.addedUnits.length > 0">
+        <h4>Anadidas</h4>
+        <div class="chips">
+          <span class="chip" *ngFor="let unit of result.addedUnits; trackBy: trackByUnitOption">{{ unit.name }}</span>
+        </div>
+      </div>
+
+      <div class="result-block" *ngIf="result.removedUnits.length > 0">
+        <h4>Retiradas</h4>
+        <div class="chips">
+          <span class="chip" *ngFor="let unit of result.removedUnits; trackBy: trackByUnitOption">{{ unit.name }}</span>
+        </div>
+      </div>
+
+      <div class="result-block">
+        <h4>Departamentos finales</h4>
+        <div class="chips" *ngIf="result.finalDepartments.length > 0; else noResultDepartments">
+          <span class="chip" *ngFor="let department of result.finalDepartments">{{ department }}</span>
+        </div>
+        <ng-template #noResultDepartments><span class="muted">Sin departamentos asignados.</span></ng-template>
+      </div>
+
+      <div class="result-block" *ngIf="result.addedDepartments.length > 0">
+        <h4>Departamentos anadidos</h4>
+        <div class="chips">
+          <span class="chip" *ngFor="let department of result.addedDepartments">+ {{ department }}</span>
+        </div>
+      </div>
+
+      <div class="result-block" *ngIf="result.removedDepartments.length > 0">
+        <h4>Departamentos retirados</h4>
+        <div class="chips">
+          <span class="chip" *ngFor="let department of result.removedDepartments">- {{ department }}</span>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <button class="btn-primary" (click)="closeUnitResultDialog()">Aceptar</button>
+    </footer>
+  </section>
 </div>

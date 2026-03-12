@@ -55,4 +55,21 @@ export class GroupService {
 
         return this.http.get<GroupMembersResponse>(`${this.API_URL}/${groupId}/members`, { params });
     }
+
+    /**
+     * Anade un usuario a un grupo.
+     */
+    addUserToGroup(groupId: string, userId: string): Observable<void> {
+        return this.http.post<void>(`${this.API_URL}/memberships`, { groupId, userId });
+    }
+
+    /**
+     * Quita un usuario de un grupo.
+     */
+    removeUserFromGroup(groupId: string, userId: string): Observable<void> {
+        const params = new HttpParams()
+            .set('groupId', groupId)
+            .set('userId', userId);
+        return this.http.delete<void>(`${this.API_URL}/memberships`, { params });
+    }
 }

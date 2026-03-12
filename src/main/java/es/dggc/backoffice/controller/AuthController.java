@@ -67,6 +67,10 @@ public class AuthController {
 
         // Retornar respuesta apropiada según el resultado
         if (response.isSuccess()) {
+            log.info("Login OK usuario={} role={} managedSiteIds={}",
+                    response.getUsername(),
+                    response.getRole(),
+                    response.getManagedSiteIds());
             return ResponseEntity.ok(response);
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);

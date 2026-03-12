@@ -15,6 +15,8 @@ export interface LoginResponse {
   email?: string;
   message?: string;
   groups?: string[];
+  managedSiteIds?: string[];
+  role?: 'GLOBAL_ADMIN' | 'UNIT_ADMIN' | 'READ_ONLY' | string;
 }
 
 /**
@@ -165,26 +167,25 @@ export class AuthService {
    */
   private saveUserData(data: LoginResponse): void {
     const groups = data.groups || [];
-    const isAdmin = groups.includes('GROUP_ALFRESCO_ADMINISTRATORS');
+    const isAdminByGroup = groups.some(group => (group || '').toUpperCase() === 'GROUP_ALFRESCO_ADMINISTRATORS');
+    const managedFromGroups = this.extractManagedSiteIdsFromGroups(groups);
+    const managedSiteIds = this.normalizeSiteIds(
+      (data.managedSiteIds && data.managedSiteIds.length > 0) ? data.managedSiteIds : managedFromGroups
+    );
 
-    // Extraer IDs de sitios donde el usuario es SiteManager
-    // Nombre del grupo: GROUP_site_<siteId>_SiteManager
-    const managedSiteIds: string[] = [];
-    for (const group of groups) {
-      const match = group.match(/^GROUP_site_(.+)_SiteManager$/);
-      if (match) {
-        managedSiteIds.push(match[1]);
-      }
-    }
-
+    const backendRole = (data.role || '').trim().toUpperCase();
     let derivedRole: string;
-    if (isAdmin) {
+    if (backendRole === 'GLOBAL_ADMIN' || backendRole === 'UNIT_ADMIN' || backendRole === 'READ_ONLY') {
+      derivedRole = backendRole;
+    } else if (isAdminByGroup) {
       derivedRole = 'GLOBAL_ADMIN';
     } else if (managedSiteIds.length > 0) {
       derivedRole = 'UNIT_ADMIN';
     } else {
       derivedRole = 'READ_ONLY';
     }
+
+    const isAdmin = derivedRole === 'GLOBAL_ADMIN';
 
     const userData = {
       username: data.username,
@@ -197,6 +198,31 @@ export class AuthService {
       role: derivedRole
     };
     localStorage.setItem(this.USER_KEY, JSON.stringify(userData));
+  }
+
+  private extractManagedSiteIdsFromGroups(groups: string[]): string[] {
+    const managedSiteIds: string[] = [];
+    for (const group of groups || []) {
+      const match = (group || '').match(/^GROUP_site_(.+)_SiteManager$/i);
+      if (match && match[1]) {
+        managedSiteIds.push(match[1]);
+      }
+    }
+    return managedSiteIds;
+  }
+
+  private normalizeSiteIds(siteIds: string[]): string[] {
+    const normalized: string[] = [];
+    for (const siteId of siteIds || []) {
+      const clean = (siteId || '').trim();
+      if (!clean) {
+        continue;
+      }
+      if (!normalized.some(existing => existing.toUpperCase() === clean.toUpperCase())) {
+        normalized.push(clean);
+      }
+    }
+    return normalized;
   }
 
   /**

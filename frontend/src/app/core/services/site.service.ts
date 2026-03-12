@@ -50,4 +50,31 @@ export class SiteService {
     getSiteById(siteId: string): Observable<Site> {
         return this.http.get<Site>(`${this.API_URL}/${siteId}`);
     }
+
+    /**
+     * Asigna rol de Administrador de Unidad (SiteManager) a un usuario en un sitio.
+     */
+    assignUnitAdmin(siteId: string, userId: string): Observable<void> {
+        const encodedSiteId = encodeURIComponent(siteId);
+        const encodedUserId = encodeURIComponent(userId);
+        return this.http.put<void>(`${this.API_URL}/${encodedSiteId}/admins/${encodedUserId}`, {});
+    }
+
+    /**
+     * Asigna rol de usuario de sitio (SiteCollaborator) a un usuario en un sitio.
+     */
+    assignSiteUser(siteId: string, userId: string): Observable<void> {
+        const encodedSiteId = encodeURIComponent(siteId);
+        const encodedUserId = encodeURIComponent(userId);
+        return this.http.put<void>(`${this.API_URL}/${encodedSiteId}/users/${encodedUserId}`, {});
+    }
+
+    /**
+     * Elimina al usuario de un sitio.
+     */
+    removeSiteUser(siteId: string, userId: string): Observable<void> {
+        const encodedSiteId = encodeURIComponent(siteId);
+        const encodedUserId = encodeURIComponent(userId);
+        return this.http.delete<void>(`${this.API_URL}/${encodedSiteId}/users/${encodedUserId}`);
+    }
 }

@@ -12,6 +12,10 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Base64;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -31,6 +35,7 @@ import java.util.stream.Collectors;
 public class AlfrescoAuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AlfrescoAuthService.class);
+    private static final Pattern SITE_MANAGER_GROUP_PATTERN = Pattern.compile("^GROUP_site_(.+)_SiteManager$", Pattern.CASE_INSENSITIVE);
 
     private final RestTemplate restTemplate;
     private final AlfrescoProperties alfrescoProperties;
@@ -67,6 +72,14 @@ public class AlfrescoAuthService {
 
             // 3. Obtener los grupos del usuario
             List<String> groups = getPersonGroupsWithCredentials(username, basicAuthToken);
+            List<String> managedSiteIdsByGroups = extractManagedSiteIdsFromGroups(groups);
+            List<String> managedSiteIdsBySites = getManagedSiteIdsWithCredentials(username, basicAuthToken);
+            List<String> managedSiteIds = mergeNormalizedSiteIds(managedSiteIdsByGroups, managedSiteIdsBySites);
+            boolean isGlobalAdmin = groups.stream()
+                    .anyMatch(groupId -> "GROUP_ALFRESCO_ADMINISTRATORS".equalsIgnoreCase(groupId));
+            String role = isGlobalAdmin
+                    ? "GLOBAL_ADMIN"
+                    : (!managedSiteIds.isEmpty() ? "UNIT_ADMIN" : "READ_ONLY");
 
             // 4. Construir respuesta
             LoginResponse response = new LoginResponse(
@@ -77,6 +90,16 @@ public class AlfrescoAuthService {
                     person.getLastName() != null ? person.getLastName() : "",
                     person.getEmail() != null ? person.getEmail() : "",
                     groups);
+            response.setManagedSiteIds(managedSiteIds);
+            response.setRole(role);
+            log.info(
+                    "Rol derivado para {}: {} (groups={}, managedByGroups={}, managedBySites={}, managedFinal={})",
+                    username,
+                    role,
+                    groups.size(),
+                    managedSiteIdsByGroups.size(),
+                    managedSiteIdsBySites.size(),
+                    managedSiteIds.size());
 
             log.info("Login exitoso para usuario: {}", username);
             return response;
@@ -132,8 +155,9 @@ public class AlfrescoAuthService {
                     request,
                     AlfrescoPersonResponse.class);
 
-            if (response.getBody() != null) {
-                return response.getBody().getEntry();
+            AlfrescoPersonResponse personBody = response.getBody();
+            if (personBody != null) {
+                return personBody.getEntry();
             }
 
             return null;
@@ -173,9 +197,11 @@ public class AlfrescoAuthService {
                     request,
                     AlfrescoGroupListResponse.class);
 
-            if (response.getBody() != null && response.getBody().getList() != null
-                    && response.getBody().getList().getEntries() != null) {
-                return response.getBody().getList().getEntries().stream()
+            AlfrescoGroupListResponse groupsBody = response.getBody();
+            if (groupsBody != null && groupsBody.getList() != null
+                    && groupsBody.getList().getEntries() != null) {
+                return groupsBody.getList().getEntries().stream()
+                        .filter(wrapper -> wrapper.getEntry() != null)
                         .map(wrapper -> wrapper.getEntry().getId())
                         .collect(Collectors.toList());
             }
@@ -184,6 +210,94 @@ public class AlfrescoAuthService {
         } catch (Exception e) {
             log.warn("No se pudieron obtener los grupos del usuario {}: {}", username, e.getMessage());
             return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Obtiene los IDs de sitio donde el usuario tiene rol SiteManager.
+     *
+     * GET /api/-default-/public/alfresco/versions/1/people/{personId}/sites
+     */
+    private List<String> getManagedSiteIdsWithCredentials(String username, String basicAuthToken) {
+        try {
+            String url = alfrescoProperties.getCoreApiUrl() + "/people/" + username + "/sites?maxItems=500&skipCount=0";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<AlfrescoUserSiteListResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    AlfrescoUserSiteListResponse.class);
+
+            AlfrescoUserSiteListResponse body = response.getBody();
+            if (body == null || body.getList() == null || body.getList().getEntries() == null) {
+                return new ArrayList<>();
+            }
+
+            Set<String> managedIds = new LinkedHashSet<>();
+            body.getList().getEntries().stream()
+                    .filter(wrapper -> wrapper != null && wrapper.getEntry() != null)
+                    .map(AlfrescoUserSiteListResponse.UserSiteEntryWrapper::getEntry)
+                    .filter(entry -> "SiteManager".equalsIgnoreCase(entry.getRole() != null ? entry.getRole().trim() : ""))
+                    .forEach(entry -> {
+                        String siteId = entry.getSite() != null && entry.getSite().getId() != null
+                                ? entry.getSite().getId()
+                                : entry.getId();
+                        if (siteId != null && !siteId.trim().isEmpty()) {
+                            managedIds.add(siteId.trim());
+                        }
+                    });
+
+            return new ArrayList<>(managedIds);
+        } catch (Exception e) {
+            log.warn("No se pudieron obtener los sitios administrados del usuario {}: {}", username, e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    private List<String> extractManagedSiteIdsFromGroups(List<String> groups) {
+        if (groups == null || groups.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Set<String> managedIds = new LinkedHashSet<>();
+        for (String groupId : groups) {
+            if (groupId == null || groupId.trim().isEmpty()) {
+                continue;
+            }
+            Matcher matcher = SITE_MANAGER_GROUP_PATTERN.matcher(groupId.trim());
+            if (matcher.matches()) {
+                String siteId = matcher.group(1);
+                if (siteId != null && !siteId.trim().isEmpty()) {
+                    managedIds.add(siteId.trim());
+                }
+            }
+        }
+        return new ArrayList<>(managedIds);
+    }
+
+    private List<String> mergeNormalizedSiteIds(List<String> first, List<String> second) {
+        Set<String> merged = new LinkedHashSet<>();
+        appendNormalizedSiteIds(merged, first);
+        appendNormalizedSiteIds(merged, second);
+        return new ArrayList<>(merged);
+    }
+
+    private void appendNormalizedSiteIds(Set<String> target, List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+
+        for (String siteId : source) {
+            if (siteId == null || siteId.trim().isEmpty()) {
+                continue;
+            }
+            target.add(siteId.trim());
         }
     }
 
@@ -208,7 +322,6 @@ public class AlfrescoAuthService {
             }
 
             String username = parts[0];
-            String password = parts[1];
 
             // Validar contra Alfresco
             String url = alfrescoProperties.getCoreApiUrl() + "/people/" + username;

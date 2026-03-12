@@ -6,10 +6,16 @@ import es.dggc.backoffice.model.dto.UserSiteMembershipListResponse;
 import es.dggc.backoffice.service.AlfrescoUserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.client.HttpClientErrorException;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Controlador REST para operaciones de gestión de usuarios.
@@ -173,5 +179,47 @@ public class UserController {
 
         UserSiteMembershipListResponse response = alfrescoUserService.getUserSites(token, userId);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Endpoint para subir un PDF justificante de reasignacion de unidad.
+     *
+     * POST /api/users/{userId}/unit-reassignment-proof
+     * Content-Type: multipart/form-data
+     */
+    @PostMapping(path = "/{userId}/unit-reassignment-proof", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadUnitReassignmentProof(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "operationMode", required = false) String operationMode,
+            @RequestParam(value = "fromUnitIds", required = false) List<String> fromUnitIds,
+            @RequestParam(value = "targetUnitIds", required = false) List<String> targetUnitIds,
+            @RequestParam(value = "finalUnitIds", required = false) List<String> finalUnitIds) {
+
+        log.info("Solicitud de subida de justificante de reasignacion de unidad para usuario {}", userId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            log.warn("Solicitud sin header de autorizacion valido");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Collections.<String, Object>emptyMap());
+        }
+
+        try {
+            Map<String, Object> response = alfrescoUserService.storeUnitReassignmentProof(
+                    userId,
+                    file,
+                    operationMode,
+                    fromUnitIds,
+                    targetUnitIds,
+                    finalUnitIds);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Justificante invalido para usuario {}: {}", userId, e.getMessage());
+            return ResponseEntity.badRequest().body(Collections.<String, Object>singletonMap("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error guardando justificante para usuario {}: {}", userId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Collections.<String, Object>singletonMap("message", "No se pudo guardar el justificante."));
+        }
     }
 }

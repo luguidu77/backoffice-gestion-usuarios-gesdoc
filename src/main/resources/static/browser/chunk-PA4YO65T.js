@@ -1,0 +1,1 @@
+import{a as t}from"./chunk-JSCWNJWT.js";import"./chunk-ATZWOCX2.js";import"./chunk-CABYN4MH.js";import"./chunk-35PI25VP.js";var a=[{path:"",canActivate:[t],children:[{path:"",loadComponent:()=>import("./chunk-CMTEUZ7Z.js").then(o=>o.UserListPageComponent)}]}];export{a as usersRoutes};

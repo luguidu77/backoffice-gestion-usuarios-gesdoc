@@ -1,5 +1,5 @@
 <aside class="sidebar" [class.collapsed]="isCollapsed">
-    <!-- Cabecera del sidebar (Logo/Título y botón contraer) -->
+    <!-- Cabecera del sidebar (Logo/TÃ­tulo y botÃ³n contraer) -->
     <div class="sidebar-header">
         <div class="brand" *ngIf="!isCollapsed">
             <span class="brand-avatar" aria-hidden="true">{{ initials }}</span>
@@ -12,45 +12,40 @@
             <span class="brand-avatar" aria-hidden="true" [title]="displayName">{{ initials }}</span>
         </div>
         <button class="toggle-btn" (click)="toggleSidebar()"
-            [attr.aria-label]="isCollapsed ? 'Expandir menú' : 'Contraer menú'"
+            [attr.aria-label]="isCollapsed ? 'Expandir menÃº' : 'Contraer menÃº'"
             [title]="isCollapsed ? 'Expandir' : 'Contraer'">
             <span aria-hidden="true" *ngIf="!isCollapsed">&laquo;</span>
             <span aria-hidden="true" *ngIf="isCollapsed">&raquo;</span>
         </button>
     </div>
 
-    <!-- Navegación principal -->
-    <nav class="sidebar-nav" aria-label="Navegación principal">
+    <!-- NavegaciÃ³n principal -->
+    <nav class="sidebar-nav" aria-label="NavegaciÃ³n principal">
         <a routerLink="/dashboard" routerLinkActive="active" class="nav-link" aria-label="Ir al Dashboard"
             title="Dashboard">
-            <span class="nav-icon" aria-hidden="true">&#128202;</span> <!-- Icono de gráfico -->
+            <span class="nav-icon" aria-hidden="true">&#128202;</span> <!-- Icono de grÃ¡fico -->
             <span class="nav-text" *ngIf="!isCollapsed">Dashboard</span>
         </a>
 
-        <a *ngIf="isGlobalAdmin" routerLink="/users" routerLinkActive="active" class="nav-link"
-            aria-label="Gestión de usuarios" title="Usuarios">
+        <a *ngIf="canManageUsers" routerLink="/users" routerLinkActive="active" class="nav-link"
+            aria-label="GestiÃ³n de usuarios" title="Usuarios">
             <span class="nav-icon" aria-hidden="true">&#128101;</span> <!-- Icono de grupo -->
             <span class="nav-text" *ngIf="!isCollapsed">Usuarios</span>
         </a>
 
-        <a routerLink="/unidades" routerLinkActive="active" class="nav-link" aria-label="Gestión de unidades"
+        <a routerLink="/unidades" routerLinkActive="active" class="nav-link" aria-label="GestiÃ³n de unidades"
             title="Unidades">
             <span class="nav-icon" aria-hidden="true">&#128194;</span> <!-- Icono de carpeta abierta -->
             <span class="nav-text" *ngIf="!isCollapsed">Unidades</span>
-        </a>
-
-        <a *ngIf="isGlobalAdmin" routerLink="/groups" routerLinkActive="active" class="nav-link"
-            aria-label="Gestión de grupos" title="Grupos">
-            <span class="nav-icon" aria-hidden="true">&#128101;</span> <!-- Icono de grupo -->
-            <span class="nav-text" *ngIf="!isCollapsed">Grupos</span>
         </a>
     </nav>
 
     <!-- Usuario y logout (Abajo del todo) -->
     <div class="sidebar-footer" *ngIf="authService.isAuthenticated()">
-        <button class="btn-logout nav-link" (click)="logout()" aria-label="Cerrar sesión" title="Salir">
+        <button class="btn-logout nav-link" (click)="logout()" aria-label="Cerrar sesiÃ³n" title="Salir">
             <span class="nav-icon" aria-hidden="true">&#128682;</span> <!-- Icono de puerta de salida -->
             <span class="nav-text" *ngIf="!isCollapsed">Salir</span>
         </button>
     </div>
 </aside>
+

@@ -39,3 +39,27 @@ export interface UserSiteMembershipListResponse {
   sites: UserSiteMembership[];
   totalItems: number;
 }
+
+export type UnitReassignmentMode = 'TRANSFER' | 'ADD';
+
+export interface UnitReassignmentProofPayload {
+  file: File;
+  operationMode: UnitReassignmentMode;
+  fromUnitIds: string[];
+  targetUnitIds: string[];
+  finalUnitIds: string[];
+}
+
+export interface UnitReassignmentProofResponse {
+  userId: string;
+  operationMode: UnitReassignmentMode;
+  fromUnitIds: string[];
+  targetUnitIds: string[];
+  finalUnitIds: string[];
+  originalFileName: string;
+  storedFileName: string;
+  storedPath: string;
+  metadataPath: string;
+  size: number;
+  createdAt: string;
+}

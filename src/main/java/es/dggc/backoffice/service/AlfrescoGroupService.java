@@ -3,7 +3,6 @@ package es.dggc.backoffice.service;
 import es.dggc.backoffice.config.AlfrescoProperties;
 import es.dggc.backoffice.model.dto.AlfrescoGroupListResponse;
 import es.dggc.backoffice.model.dto.AlfrescoGroupMembersListResponse;
-import es.dggc.backoffice.model.dto.GroupAdminResponse;
 import es.dggc.backoffice.model.dto.GroupAdminResponse.GroupItem;
 import es.dggc.backoffice.model.dto.GroupAdminResponse.GroupListResponse;
 import es.dggc.backoffice.model.dto.GroupAdminResponse.GroupMemberItem;
@@ -17,7 +16,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -76,10 +77,12 @@ public class AlfrescoGroupService {
                     url, HttpMethod.GET,
                     new HttpEntity<>(headers), AlfrescoGroupListResponse.class);
 
-            if (response.getBody() != null && response.getBody().getList() != null
-                    && response.getBody().getList().getEntries() != null) {
+            AlfrescoGroupListResponse body = response.getBody();
+            if (body != null && body.getList() != null
+                    && body.getList().getEntries() != null) {
 
-                List<GroupItem> groups = response.getBody().getList().getEntries().stream()
+                List<GroupItem> groups = body.getList().getEntries().stream()
+                        .filter(w -> w.getEntry() != null)
                         .map(w -> {
                             AlfrescoGroupListResponse.GroupEntry e = w.getEntry();
                             return new GroupItem(
@@ -88,7 +91,7 @@ public class AlfrescoGroupService {
                                     Boolean.TRUE.equals(e.getIsRoot()),
                                     0);
                         })
-                        .filter(g -> searchTerm == null || searchTerm.isBlank()
+                        .filter(g -> searchTerm == null || searchTerm.trim().isEmpty()
                                 || g.getDisplayName().toLowerCase().contains(searchTerm.toLowerCase())
                                 || g.getId().toLowerCase().contains(searchTerm.toLowerCase()))
                         .collect(Collectors.toList());
@@ -133,10 +136,12 @@ public class AlfrescoGroupService {
                     url, HttpMethod.GET,
                     new HttpEntity<>(headers), AlfrescoGroupMembersListResponse.class);
 
-            if (response.getBody() != null && response.getBody().getList() != null
-                    && response.getBody().getList().getEntries() != null) {
+            AlfrescoGroupMembersListResponse membersBody = response.getBody();
+            if (membersBody != null && membersBody.getList() != null
+                    && membersBody.getList().getEntries() != null) {
 
-                List<GroupMemberItem> members = response.getBody().getList().getEntries().stream()
+                List<GroupMemberItem> members = membersBody.getList().getEntries().stream()
+                        .filter(w -> w.getEntry() != null)
                         .map(w -> {
                             AlfrescoGroupMembersListResponse.MemberEntry e = w.getEntry();
                             return new GroupMemberItem(
@@ -161,5 +166,44 @@ public class AlfrescoGroupService {
             log.error("Error al obtener miembros del grupo {}: {}", groupId, e.getMessage(), e);
             return new GroupMembersResponse(groupId, groupId, new ArrayList<>(), 0);
         }
+    }
+
+    /**
+     * Anade un usuario (PERSON) a un grupo.
+     */
+    public void addPersonToGroup(String basicAuthToken, String groupId, String userId) {
+        String url = UriComponentsBuilder.fromHttpUrl(alfrescoProperties.getBaseUrl())
+                .path("/api/-default-/public/alfresco/versions/1/groups/{groupId}/members")
+                .buildAndExpand(groupId)
+                .toUriString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Basic " + basicAuthToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, String> payload = new HashMap<String, String>();
+        payload.put("id", userId);
+        payload.put("memberType", "PERSON");
+
+        HttpEntity<Map<String, String>> request = new HttpEntity<Map<String, String>>(payload, headers);
+        restTemplate.exchange(url, HttpMethod.POST, request, Void.class);
+        log.info("Usuario {} anadido al grupo {}", userId, groupId);
+    }
+
+    /**
+     * Quita un usuario (PERSON) de un grupo.
+     */
+    public void removePersonFromGroup(String basicAuthToken, String groupId, String userId) {
+        String url = UriComponentsBuilder.fromHttpUrl(alfrescoProperties.getBaseUrl())
+                .path("/api/-default-/public/alfresco/versions/1/groups/{groupId}/members/{userId}")
+                .buildAndExpand(groupId, userId)
+                .toUriString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Basic " + basicAuthToken);
+
+        HttpEntity<Void> request = new HttpEntity<Void>(headers);
+        restTemplate.exchange(url, HttpMethod.DELETE, request, Void.class);
+        log.info("Usuario {} eliminado del grupo {}", userId, groupId);
     }
 }

@@ -1,5 +1,6 @@
 package es.dggc.backoffice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import es.dggc.backoffice.config.AlfrescoProperties;
 import es.dggc.backoffice.model.dto.AlfrescoPersonResponse;
 import es.dggc.backoffice.model.dto.AlfrescoPeopleListResponse;
@@ -16,11 +17,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +46,8 @@ import java.util.stream.Collectors;
 public class AlfrescoUserService {
 
     private static final Logger log = LoggerFactory.getLogger(AlfrescoUserService.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final DateTimeFormatter PROOF_TS_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS");
 
     private final RestTemplate restTemplate;
     private final AlfrescoProperties alfrescoProperties;
@@ -84,14 +100,15 @@ public class AlfrescoUserService {
                     entity,
                     AlfrescoPeopleListResponse.class);
 
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                AlfrescoPeopleListResponse alfrescoResponse = response.getBody();
+            AlfrescoPeopleListResponse alfrescoResponse = response.getBody();
+            if (response.getStatusCode() == HttpStatus.OK && alfrescoResponse != null) {
 
                 // Convertir respuesta de Alfresco a nuestro DTO simplificado
                 List<UserDto> users = new ArrayList<>();
 
                 if (alfrescoResponse.getList() != null && alfrescoResponse.getList().getEntries() != null) {
                     users = alfrescoResponse.getList().getEntries().stream()
+                            .filter(wrapper -> wrapper.getEntry() != null)
                             .map(wrapper -> {
                                 AlfrescoPersonResponse.PersonEntry person = wrapper.getEntry();
                                 return new UserDto(
@@ -178,6 +195,7 @@ public class AlfrescoUserService {
                 if (alfrescoResponse != null && alfrescoResponse.getList() != null
                         && alfrescoResponse.getList().getEntries() != null) {
                     users = alfrescoResponse.getList().getEntries().stream()
+                            .filter(wrapper -> wrapper.getEntry() != null && wrapper.getEntry().getPerson() != null)
                             .map(wrapper -> {
                                 AlfrescoPersonResponse.PersonEntry person = wrapper.getEntry().getPerson();
                                 return new UserDto(
@@ -240,6 +258,7 @@ public class AlfrescoUserService {
                 if (alfrescoResponse != null && alfrescoResponse.getList() != null
                         && alfrescoResponse.getList().getEntries() != null) {
                     users = alfrescoResponse.getList().getEntries().stream()
+                            .filter(wrapper -> wrapper.getEntry() != null)
                             .map(wrapper -> {
                                 AlfrescoPersonResponse.PersonEntry person = wrapper.getEntry();
                                 return new UserDto(
@@ -293,10 +312,12 @@ public class AlfrescoUserService {
                     request,
                     AlfrescoGroupListResponse.class);
 
-            if (response.getBody() != null && response.getBody().getList() != null
-                    && response.getBody().getList().getEntries() != null) {
+            AlfrescoGroupListResponse personGroupsBody = response.getBody();
+            if (personGroupsBody != null && personGroupsBody.getList() != null
+                    && personGroupsBody.getList().getEntries() != null) {
 
-                List<GroupDto> groups = response.getBody().getList().getEntries().stream()
+                List<GroupDto> groups = personGroupsBody.getList().getEntries().stream()
+                        .filter(wrapper -> wrapper.getEntry() != null)
                         .map(wrapper -> {
                             AlfrescoGroupListResponse.GroupEntry entry = wrapper.getEntry();
                             return new GroupDto(
@@ -343,17 +364,19 @@ public class AlfrescoUserService {
                     request,
                     AlfrescoUserSiteListResponse.class);
 
-            if (response.getBody() != null && response.getBody().getList() != null
-                    && response.getBody().getList().getEntries() != null) {
+            AlfrescoUserSiteListResponse sitesBody = response.getBody();
+            if (sitesBody != null && sitesBody.getList() != null
+                    && sitesBody.getList().getEntries() != null) {
 
-                List<UserSiteMembershipDto> memberships = response.getBody().getList().getEntries().stream()
+                List<UserSiteMembershipDto> memberships = sitesBody.getList().getEntries().stream()
+                        .filter(wrapper -> wrapper.getEntry() != null)
                         .map(wrapper -> {
                             AlfrescoUserSiteListResponse.UserSiteEntry entry = wrapper.getEntry();
                             String siteId = entry.getSite() != null ? entry.getSite().getId() : entry.getId();
                             String siteTitle = entry.getSite() != null
-                                    ? (entry.getSite().getDescription() != null && !entry.getSite().getDescription().isBlank()
+                                    ? (entry.getSite().getDescription() != null && !entry.getSite().getDescription().trim().isEmpty()
                                             ? entry.getSite().getDescription()
-                                            : (entry.getSite().getTitle() != null && !entry.getSite().getTitle().isBlank()
+                                            : (entry.getSite().getTitle() != null && !entry.getSite().getTitle().trim().isEmpty()
                                                     ? entry.getSite().getTitle()
                                                     : siteId))
                                     : siteId;
@@ -372,5 +395,110 @@ public class AlfrescoUserService {
             log.error("Error al obtener los sitios del usuario {}: {}", userId, e.getMessage());
             return new UserSiteMembershipListResponse(new ArrayList<>(), 0);
         }
+    }
+
+    /**
+     * Guarda el PDF justificante de una reasignacion de unidad y su metadata.
+     * El archivo se persiste en target/unit-reassignment-proofs.
+     */
+    public Map<String, Object> storeUnitReassignmentProof(
+            String userId,
+            MultipartFile file,
+            String operationMode,
+            List<String> fromUnitIds,
+            List<String> targetUnitIds,
+            List<String> finalUnitIds) {
+
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Debes adjuntar un PDF justificante.");
+        }
+
+        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename() != null
+                ? file.getOriginalFilename()
+                : "justificante.pdf");
+
+        String contentType = file.getContentType() != null ? file.getContentType().trim().toLowerCase() : "";
+        boolean looksLikePdf = "application/pdf".equals(contentType) || originalFileName.toLowerCase().endsWith(".pdf");
+        if (!looksLikePdf) {
+            throw new IllegalArgumentException("El justificante debe ser un archivo PDF.");
+        }
+
+        String safeUserId = sanitizeToken(userId);
+        String normalizedMode = normalizeOperationMode(operationMode);
+        List<String> normalizedFrom = normalizeUnitIds(fromUnitIds);
+        List<String> normalizedTarget = normalizeUnitIds(targetUnitIds);
+        List<String> normalizedFinal = normalizeUnitIds(finalUnitIds);
+
+        String timestamp = LocalDateTime.now().format(PROOF_TS_FORMAT);
+        String storedFileName = safeUserId + "_" + timestamp + ".pdf";
+
+        Path baseDir = Paths.get(System.getProperty("user.dir"), "target", "unit-reassignment-proofs");
+        Path filePath = baseDir.resolve(storedFileName).normalize();
+        Path metadataPath = baseDir.resolve(safeUserId + "_" + timestamp + ".json").normalize();
+
+        try {
+            Files.createDirectories(baseDir);
+
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            Map<String, Object> metadata = new LinkedHashMap<String, Object>();
+            metadata.put("userId", userId);
+            metadata.put("operationMode", normalizedMode);
+            metadata.put("fromUnitIds", normalizedFrom);
+            metadata.put("targetUnitIds", normalizedTarget);
+            metadata.put("finalUnitIds", normalizedFinal);
+            metadata.put("originalFileName", originalFileName);
+            metadata.put("storedFileName", storedFileName);
+            metadata.put("storedPath", filePath.toString());
+            metadata.put("metadataPath", metadataPath.toString());
+            metadata.put("size", file.getSize());
+            metadata.put("createdAt", LocalDateTime.now().toString());
+
+            OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(metadataPath.toFile(), metadata);
+            return metadata;
+        } catch (IOException e) {
+            throw new RuntimeException("No se pudo guardar el justificante PDF.", e);
+        }
+    }
+
+    private String sanitizeToken(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return "unknown";
+        }
+        return value.trim().replaceAll("[^A-Za-z0-9_-]", "_");
+    }
+
+    private String normalizeOperationMode(String operationMode) {
+        if (operationMode == null) {
+            return "ADD";
+        }
+        String normalized = operationMode.trim().toUpperCase();
+        if ("TRANSFER".equals(normalized)) {
+            return "TRANSFER";
+        }
+        return "ADD";
+    }
+
+    private List<String> normalizeUnitIds(List<String> unitIds) {
+        if (unitIds == null || unitIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> normalized = new ArrayList<String>();
+        for (String unitId : unitIds) {
+            if (unitId == null) {
+                continue;
+            }
+            String clean = unitId.trim().toUpperCase();
+            if (clean.isEmpty()) {
+                continue;
+            }
+            if (!normalized.contains(clean)) {
+                normalized.add(clean);
+            }
+        }
+        return normalized;
     }
 }

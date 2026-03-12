@@ -32,10 +32,10 @@ export class SidebarComponent {
     return first + last;
   }
 
-  /** Verdadero si el usuario tiene rol GLOBAL_ADMIN. */
-  get isGlobalAdmin(): boolean {
-    const user = this.authService.getUserData();
-    return user?.isGlobalAdmin === true;
+  /** GLOBAL_ADMIN y UNIT_ADMIN pueden gestionar usuarios en su alcance. */
+  get canManageUsers(): boolean {
+    const role = this.authService.getUserRole();
+    return role === 'GLOBAL_ADMIN' || role === 'UNIT_ADMIN';
   }
 
   /** Rol legible del usuario para mostrar en UI. */

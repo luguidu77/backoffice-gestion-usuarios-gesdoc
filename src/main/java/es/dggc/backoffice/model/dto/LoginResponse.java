@@ -16,6 +16,8 @@ public class LoginResponse {
     private String email;
     private String message;
     private java.util.List<String> groups;
+    private java.util.List<String> managedSiteIds;
+    private String role;
 
     // ============================================================
     // CONSTRUCTORES
@@ -107,5 +109,21 @@ public class LoginResponse {
 
     public void setGroups(java.util.List<String> groups) {
         this.groups = groups;
+    }
+
+    public java.util.List<String> getManagedSiteIds() {
+        return managedSiteIds;
+    }
+
+    public void setManagedSiteIds(java.util.List<String> managedSiteIds) {
+        this.managedSiteIds = managedSiteIds;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 }

@@ -41,7 +41,7 @@ export const routes: Routes = [
     // Gestión de usuarios - protegida con authGuard y roleGuard
     path: 'users',
     canActivate: [authGuard, roleGuard],
-    data: { roles: [AppRole.GLOBAL_ADMIN] },
+    data: { roles: [AppRole.GLOBAL_ADMIN, AppRole.UNIT_ADMIN] },
     loadChildren: () =>
       import('./features/users/users.routes').then(m => m.usersRoutes)
   },

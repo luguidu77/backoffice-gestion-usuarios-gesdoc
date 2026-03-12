@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 
 /**
  * Controlador REST para operaciones de gestión de sitios.
@@ -78,5 +79,101 @@ public class SiteController {
 
         log.info("Listado de sitios: {} sitios devueltos", response.getSites().size());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Asigna rol de SiteManager a un usuario en una unidad concreta.
+     *
+     * PUT /api/sites/{siteId}/admins/{userId}
+     */
+    @PutMapping("/{siteId}/admins/{userId}")
+    public ResponseEntity<Void> assignUnitAdmin(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String siteId,
+            @PathVariable String userId) {
+
+        log.info("Solicitud para asignar SiteManager en site {} al usuario {}", siteId, userId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            log.warn("Solicitud sin header de autorizacion valido");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String token = authHeader.substring(6);
+
+        try {
+            alfrescoSiteService.assignSiteManager(token, siteId, userId);
+            return ResponseEntity.noContent().build();
+        } catch (HttpClientErrorException e) {
+            log.warn("Error HTTP asignando SiteManager a {} en {}: {}", userId, siteId, e.getStatusCode());
+            return ResponseEntity.status(e.getStatusCode()).build();
+        } catch (RuntimeException e) {
+            log.error("Error asignando SiteManager a {} en {}: {}", userId, siteId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Asigna rol de usuario de sitio (SiteCollaborator) a un usuario en una unidad concreta.
+     *
+     * PUT /api/sites/{siteId}/users/{userId}
+     */
+    @PutMapping("/{siteId}/users/{userId}")
+    public ResponseEntity<Void> assignSiteUser(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String siteId,
+            @PathVariable String userId) {
+
+        log.info("Solicitud para asignar SiteCollaborator en site {} al usuario {}", siteId, userId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            log.warn("Solicitud sin header de autorizacion valido");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String token = authHeader.substring(6);
+
+        try {
+            alfrescoSiteService.assignSiteUser(token, siteId, userId);
+            return ResponseEntity.noContent().build();
+        } catch (HttpClientErrorException e) {
+            log.warn("Error HTTP asignando SiteCollaborator a {} en {}: {}", userId, siteId, e.getStatusCode());
+            return ResponseEntity.status(e.getStatusCode()).build();
+        } catch (RuntimeException e) {
+            log.error("Error asignando SiteCollaborator a {} en {}: {}", userId, siteId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Elimina a un usuario de una unidad (sitio).
+     *
+     * DELETE /api/sites/{siteId}/users/{userId}
+     */
+    @DeleteMapping("/{siteId}/users/{userId}")
+    public ResponseEntity<Void> removeSiteUser(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String siteId,
+            @PathVariable String userId) {
+
+        log.info("Solicitud para eliminar usuario {} del site {}", userId, siteId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            log.warn("Solicitud sin header de autorizacion valido");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String token = authHeader.substring(6);
+
+        try {
+            alfrescoSiteService.removeSiteUser(token, siteId, userId);
+            return ResponseEntity.noContent().build();
+        } catch (HttpClientErrorException e) {
+            log.warn("Error HTTP eliminando usuario {} de {}: {}", userId, siteId, e.getStatusCode());
+            return ResponseEntity.status(e.getStatusCode()).build();
+        } catch (RuntimeException e) {
+            log.error("Error eliminando usuario {} de {}: {}", userId, siteId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 }

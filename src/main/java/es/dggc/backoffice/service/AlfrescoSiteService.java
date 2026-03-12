@@ -11,9 +11,12 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -85,6 +88,7 @@ public class AlfrescoSiteService {
                 if (alfrescoResponse != null && alfrescoResponse.getList() != null
                         && alfrescoResponse.getList().getEntries() != null) {
                     sites = alfrescoResponse.getList().getEntries().stream()
+                            .filter(wrapper -> wrapper.getEntry() != null)
                             .map(wrapper -> {
                                 AlfrescoSitesListResponse.SiteEntry entry = wrapper.getEntry();
                                 return new SiteDto(
@@ -173,6 +177,7 @@ public class AlfrescoSiteService {
                 if (alfrescoResponse != null && alfrescoResponse.getList() != null
                         && alfrescoResponse.getList().getEntries() != null) {
                     sites = alfrescoResponse.getList().getEntries().stream()
+                            .filter(wrapper -> wrapper.getEntry() != null && wrapper.getEntry().getSite() != null)
                             .map(wrapper -> {
                                 AlfrescoSitesListResponse.SiteEntry siteEntry = wrapper.getEntry().getSite();
                                 return new SiteDto(
@@ -211,5 +216,143 @@ public class AlfrescoSiteService {
             log.error("Error inesperado al obtener sitios del usuario {}: {}", userId, e.getMessage(), e);
             return new SiteListResponse(new ArrayList<>(), 0, false);
         }
+    }
+
+    /**
+     * Asigna el rol SiteManager a un usuario dentro de un sitio.
+     */
+    public void assignSiteManager(String basicAuthToken, String siteId, String userId) {
+        assignSiteRole(basicAuthToken, siteId, userId, "SiteManager");
+    }
+
+    /**
+     * Asigna el rol de usuario de sitio (SiteCollaborator) a un usuario dentro de un sitio.
+     */
+    public void assignSiteUser(String basicAuthToken, String siteId, String userId) {
+        assignSiteRole(basicAuthToken, siteId, userId, "SiteCollaborator");
+    }
+
+    /**
+     * Asigna un rol de sitio a un usuario dentro de un sitio.
+     * Si la membresia ya existe, se actualiza con PUT.
+     * Si no existe, se crea con POST.
+     */
+    public void assignSiteRole(String basicAuthToken, String siteId, String userId, String role) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Basic " + basicAuthToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        String roleToAssign = (role == null || role.trim().isEmpty())
+                ? "SiteCollaborator"
+                : role.trim();
+
+        Map<String, String> payload = new HashMap<String, String>();
+        payload.put("id", userId);
+        payload.put("role", roleToAssign);
+
+        HttpEntity<Map<String, String>> request = new HttpEntity<Map<String, String>>(payload, headers);
+
+        String updateUrl = UriComponentsBuilder.fromHttpUrl(alfrescoProperties.getBaseUrl())
+                .path("/api/-default-/public/alfresco/versions/1/sites/{siteId}/members/{userId}")
+                .buildAndExpand(siteId, userId)
+                .toUriString();
+
+        try {
+            restTemplate.exchange(updateUrl, HttpMethod.PUT, request, Void.class);
+            log.info("Rol {} asignado (update) para usuario {} en sitio {}", roleToAssign, userId, siteId);
+            return;
+        } catch (HttpClientErrorException e) {
+            if (shouldFallbackToCreateMembership(e)) {
+                log.info("Membresia no existente para {} en {}. Intentando alta por POST.", userId, siteId);
+            } else {
+                throw e;
+            }
+        }
+
+        String createUrl = UriComponentsBuilder.fromHttpUrl(alfrescoProperties.getBaseUrl())
+                .path("/api/-default-/public/alfresco/versions/1/sites/{siteId}/members")
+                .buildAndExpand(siteId)
+                .toUriString();
+
+        try {
+            restTemplate.exchange(createUrl, HttpMethod.POST, request, Void.class);
+            log.info("Rol {} asignado (create) para usuario {} en sitio {}", roleToAssign, userId, siteId);
+        } catch (HttpClientErrorException.Conflict e) {
+            // Carrera concurrente: si alguien creo la membresia, hacemos PUT para asegurar rol.
+            restTemplate.exchange(updateUrl, HttpMethod.PUT, request, Void.class);
+            log.info("Rol {} reasignado tras conflicto (update) para usuario {} en sitio {}", roleToAssign, userId, siteId);
+        }
+    }
+
+    /**
+     * Elimina la membresia de un usuario en un sitio.
+     */
+    public void removeSiteUser(String basicAuthToken, String siteId, String userId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Basic " + basicAuthToken);
+
+        HttpEntity<Void> request = new HttpEntity<Void>(headers);
+
+        String deleteUrl = UriComponentsBuilder.fromHttpUrl(alfrescoProperties.getBaseUrl())
+                .path("/api/-default-/public/alfresco/versions/1/sites/{siteId}/members/{userId}")
+                .buildAndExpand(siteId, userId)
+                .toUriString();
+
+        try {
+            restTemplate.exchange(deleteUrl, HttpMethod.DELETE, request, Void.class);
+            log.info("Membresia eliminada para usuario {} en sitio {}", userId, siteId);
+        } catch (HttpClientErrorException e) {
+            if (isAlreadyNotMemberError(e)) {
+                // Operacion idempotente: si no era miembro, consideramos eliminado.
+                log.info("Usuario {} ya no era miembro de {}. Se ignora el borrado.", userId, siteId);
+                return;
+            }
+            throw e;
+        }
+    }
+
+    private boolean shouldFallbackToCreateMembership(HttpClientErrorException e) {
+        if (e == null) {
+            return false;
+        }
+
+        if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+            return true;
+        }
+
+        if (e.getStatusCode() != HttpStatus.BAD_REQUEST) {
+            return false;
+        }
+
+        String body = e.getResponseBodyAsString();
+        if (body == null) {
+            return false;
+        }
+
+        String normalized = body.toLowerCase();
+        return normalized.contains("user is not a member of the site");
+    }
+
+    private boolean isAlreadyNotMemberError(HttpClientErrorException e) {
+        if (e == null) {
+            return false;
+        }
+
+        if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+            return true;
+        }
+
+        if (e.getStatusCode() != HttpStatus.BAD_REQUEST) {
+            return false;
+        }
+
+        String body = e.getResponseBodyAsString();
+        if (body == null) {
+            return false;
+        }
+
+        String normalized = body.toLowerCase();
+        return normalized.contains("user is not a member of the site")
+                || normalized.contains("framework.exception.invalidargument");
     }
 }

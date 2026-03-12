@@ -1,7 +1,14 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { User, UserListResponse, GroupListResponse, UserSiteMembershipListResponse } from '../models/user.model';
+import {
+  User,
+  UserListResponse,
+  GroupListResponse,
+  UserSiteMembershipListResponse,
+  UnitReassignmentProofPayload,
+  UnitReassignmentProofResponse
+} from '../models/user.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -70,5 +77,33 @@ export class UserService {
    */
   getUserSites(userId: string): Observable<UserSiteMembershipListResponse> {
     return this.http.get<UserSiteMembershipListResponse>(`${this.apiUrl}/${userId}/sites`);
+  }
+
+  /**
+   * Sube un PDF justificante asociado a una reasignacion de unidad.
+   */
+  uploadUnitReassignmentProof(
+    userId: string,
+    payload: UnitReassignmentProofPayload
+  ): Observable<UnitReassignmentProofResponse> {
+    const formData = new FormData();
+    formData.append('file', payload.file);
+    formData.append('operationMode', payload.operationMode);
+
+    for (const unitId of payload.fromUnitIds) {
+      formData.append('fromUnitIds', unitId);
+    }
+    for (const unitId of payload.targetUnitIds) {
+      formData.append('targetUnitIds', unitId);
+    }
+    for (const unitId of payload.finalUnitIds) {
+      formData.append('finalUnitIds', unitId);
+    }
+
+    const encodedUserId = encodeURIComponent(userId);
+    return this.http.post<UnitReassignmentProofResponse>(
+      `${this.apiUrl}/${encodedUserId}/unit-reassignment-proof`,
+      formData
+    );
   }
 }
