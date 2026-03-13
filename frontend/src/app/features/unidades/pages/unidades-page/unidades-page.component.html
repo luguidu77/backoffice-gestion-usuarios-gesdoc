@@ -45,7 +45,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr *ngFor="let site of filteredSites()" (click)="viewMembers(site.id, site.description || site.title)"
+                    <tr *ngFor="let site of paginatedSites()" (click)="viewMembers(site.id, site.description || site.title)"
                         class="site-row" title="Ver miembros de este sitio">
                         <td class="id-column">{{ site.id }}</td>
                         <td class="title-column">{{ site.description || site.title || site.id }}</td>
@@ -69,6 +69,12 @@
                 <div class="empty-icon">🏢</div>
                 <h3>No hay unidades disponibles</h3>
                 <p>No se encontraron unidades en el sistema.</p>
+            </div>
+
+            <div class="pagination" *ngIf="filteredSites().length > 0 && totalPages() > 1">
+                <button type="button" (click)="previousPage()" [disabled]="currentPage() === 1">Anterior</button>
+                <span>Página {{ currentPage() }} de {{ totalPages() }}</span>
+                <button type="button" (click)="nextPage()" [disabled]="currentPage() === totalPages()">Siguiente</button>
             </div>
         </div>
     </div>

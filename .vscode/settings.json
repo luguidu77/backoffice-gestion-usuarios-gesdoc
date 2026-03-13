@@ -1,3 +1,9 @@
 {
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "chat.tools.terminal.autoApprove": {
+        "/^Set-Location \"c:\\\\PROYECTO BACKOFFICE GESTION USUARIOS\"; jar tf \\.\\\\target\\\\admin-usuarios\\.jar \\| Select-String \"BOOT-INF/classes/certs/guardiacivil-es\\.pem\\|BOOT-INF/classes/static/index\\.html\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

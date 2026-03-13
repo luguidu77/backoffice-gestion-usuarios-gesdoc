@@ -6,6 +6,9 @@ Sistema de gestión de usuarios integrado con Alfresco REST API v1.
 
 ## 🎯 Funcionalidades Implementadas
 
+✅ **Login de usuario contra Alfresco**  
+✅ **Logout y validación de sesión**  
+✅ **Dashboard con comprobación de backend (`/ping`)**  
 ✅ **Listado de usuarios desde Alfresco**  
 ✅ **Paginación** (maxItems, skipCount)  
 ✅ **Visualización de estado** (activo/inactivo)  
@@ -26,6 +29,13 @@ Sistema de gestión de usuarios integrado con Alfresco REST API v1.
 
 ### Controladores
 
+**AuthController.java**
+- Ubicación: `src/main/java/es/dggc/backoffice/controller/`
+- Endpoints:
+  - `POST /api/auth/login` - Login contra Alfresco (Basic Auth)
+  - `POST /api/auth/logout` - Cierre de sesión
+  - `GET /api/auth/validate` - Validación de token
+
 **UserController.java**
 - Ubicación: `src/main/java/es/dggc/backoffice/controller/`
 - Endpoints:
@@ -33,6 +43,12 @@ Sistema de gestión de usuarios integrado con Alfresco REST API v1.
     - Query params: `maxItems`, `skipCount`
     - Header: `Authorization: Basic {token}`
     - Response: `UserListResponse`
+  - `GET /api/users/{userId}` - Endpoint expuesto (pendiente de implementación)
+
+**PingController.java**
+- Ubicación: `src/main/java/es/dggc/backoffice/controller/`
+- Endpoint:
+  - `GET /ping` - Comprobación de estado del backend
 
 ### DTOs
 
@@ -53,6 +69,18 @@ Sistema de gestión de usuarios integrado con Alfresco REST API v1.
 
 ### Componentes
 
+**LoginPageComponent**
+- Ubicación: `frontend/src/app/features/auth/pages/login-page/`
+- Funcionalidad:
+  - Formulario reactivo con validaciones
+  - Redirección a ruta solicitada (`returnUrl`) tras login
+
+**DashboardPageComponent**
+- Ubicación: `frontend/src/app/features/dashboard/pages/dashboard-page/`
+- Funcionalidad:
+  - Llamada a `/ping`
+  - Estado visual de disponibilidad del backend
+
 **UserListPageComponent**
 - Ubicación: `frontend/src/app/features/users/pages/user-list-page/`
 - Archivos:
@@ -62,11 +90,19 @@ Sistema de gestión de usuarios integrado con Alfresco REST API v1.
 
 ### Servicios
 
+**AuthService**
+- Ubicación: `frontend/src/app/core/services/auth.service.ts`
+- Métodos:
+  - `login(credentials)`
+  - `logout()`
+  - `validateTicket(ticket)`
+  - Gestión de sesión en `localStorage`
+
 **UserService**
 - Ubicación: `frontend/src/app/core/services/user.service.ts`
 - Métodos:
   - `getUsers(maxItems, skipCount)` - Obtiene lista de usuarios
-  - `getUserById(userId)` - Obtiene usuario específico (TODO)
+  - `getUserById(userId)` - Obtiene usuario específico (pendiente backend)
 
 ### Modelos
 
@@ -101,6 +137,12 @@ Sistema de gestión de usuarios integrado con Alfresco REST API v1.
 ---
 
 ## 🔧 API de Alfresco Utilizada
+
+### Base URL (Preproducción GC)
+
+```
+https://alfresco23pre.guardiacivil.es/alfresco
+```
 
 ### Endpoint de Listado
 
@@ -155,7 +197,7 @@ Content-Type: application/json
    java -jar admin-usuarios.jar
    ```
 
-2. Acceder a: http://localhost:8085
+2. Acceder a: `http://localhost:8085` (entorno local/VM)
 
 3. Hacer login con credenciales de Alfresco
 
@@ -171,6 +213,7 @@ Content-Type: application/json
 - ✅ Todas las peticiones incluyen Authorization header
 - ✅ Token validado en cada petición al backend
 - ✅ Comunicación HTTPS con Alfresco
+- ✅ Certificado PEM de entorno GC empaquetado en el JAR
 
 ---
 

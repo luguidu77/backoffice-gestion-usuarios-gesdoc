@@ -28,6 +28,10 @@
     Modo Administrador de Unidad: solo puedes gestionar tus unidades y no puedes modificar roles.
   </div>
 
+  <div class="role-scope" *ngIf="isUnitContextLocked() && selectedUnitName()">
+    Contexto desde Unidades: mostrando {{ selectedUnitName() }}.
+  </div>
+
   <div class="alert success" *ngIf="actionMessage()">{{ actionMessage() }}</div>
   <div class="alert error" *ngIf="actionError()">{{ actionError() }}</div>
 
@@ -39,7 +43,7 @@
           <span class="counter">{{ unitMenus().length }}</span>
         </div>
 
-        <div class="search-box">
+        <div class="search-box" *ngIf="!isUnitContextLocked()">
           <input
             type="text"
             [ngModel]="groupSearch()"
@@ -51,7 +55,7 @@
         <div class="alert error" *ngIf="groupsError() && !groupsLoading()">{{ groupsError() }}</div>
 
         <ul class="unit-list" *ngIf="!groupsLoading() && !groupsError() && unitMenus().length > 0">
-          <li class="unit-item" *ngFor="let unit of unitMenus(); trackBy: trackByUnit">
+          <li class="unit-item" *ngFor="let unit of pagedUnitMenus(); trackBy: trackByUnit">
             <button class="unit-row" type="button" (click)="onUnitClick(unit)">
               <span class="unit-caret">{{ isUnitExpanded(unit.unitId) ? 'v' : '>' }}</span>
               <span class="unit-info">
@@ -70,6 +74,12 @@
             </ul>
           </li>
         </ul>
+
+        <div class="pager" *ngIf="!groupsLoading() && !groupsError() && unitMenus().length > 0 && unitListTotalPages() > 1">
+          <button type="button" (click)="goToPreviousUnitPage()" [disabled]="unitListPage() === 1">Anterior</button>
+          <span>Página {{ unitListPage() }} de {{ unitListTotalPages() }}</span>
+          <button type="button" (click)="goToNextUnitPage()" [disabled]="unitListPage() === unitListTotalPages()">Siguiente</button>
+        </div>
 
         <div class="empty" *ngIf="!groupsLoading() && !groupsError() && unitMenus().length === 0">
           No hay unidades/departamentos disponibles para tu alcance.
@@ -90,7 +100,7 @@
               <input
                 type="text"
                 [ngModel]="memberSearch()"
-                (ngModelChange)="memberSearch.set($event)"
+                (ngModelChange)="onMemberSearchChange($event)"
                 placeholder="Filtrar en este departamento" />
             </div>
           </div>
@@ -109,7 +119,7 @@
               <tbody>
                 <tr
                   class="clickable-row"
-                  *ngFor="let member of visibleMembers(); trackBy: trackByMember"
+                  *ngFor="let member of pagedVisibleMembers(); trackBy: trackByMember"
                   (click)="openUserActionsDrawer(member, department.unitId, department.unitName)">
                   <td class="mono">{{ member.id }}</td>
                   <td>
@@ -123,6 +133,12 @@
                 </tr>
               </tbody>
             </table>
+
+            <div class="pager" *ngIf="memberListTotalPages() > 1">
+              <button type="button" (click)="goToPreviousMemberPage()" [disabled]="memberListPage() === 1">Anterior</button>
+              <span>Página {{ memberListPage() }} de {{ memberListTotalPages() }}</span>
+              <button type="button" (click)="goToNextMemberPage()" [disabled]="memberListPage() === memberListTotalPages()">Siguiente</button>
+            </div>
           </div>
 
           <div class="empty" *ngIf="!membersLoading() && !membersError() && visibleMembers().length === 0">
@@ -131,7 +147,68 @@
         </ng-container>
 
         <ng-template #noDepartmentSelected>
-          <div class="empty big">Selecciona un departamento para ver sus usuarios.</div>
+          <ng-container *ngIf="selectedUnitMenu() as selectedUnit; else noUnitSelected">
+            <div class="panel-head users-head">
+              <div>
+                <h2>Usuarios de la unidad {{ selectedUnit.unitName }}</h2>
+                <p>
+                  Se muestran usuarios de todos los departamentos de esta unidad.
+                  <span class="technical-id">ID técnico: {{ selectedUnit.unitId }}</span>
+                </p>
+              </div>
+              <div class="search-box compact">
+                <input
+                  type="text"
+                  [ngModel]="memberSearch()"
+                  (ngModelChange)="onMemberSearchChange($event)"
+                  placeholder="Filtrar usuarios de la unidad" />
+              </div>
+            </div>
+
+            <div class="loading" *ngIf="membersLoading()">Cargando usuarios de la unidad...</div>
+            <div class="alert error" *ngIf="membersError() && !membersLoading()">{{ membersError() }}</div>
+
+            <div class="table-wrapper" *ngIf="!membersLoading() && !membersError() && visibleMembers().length > 0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>TIP</th>
+                    <th>Nombre</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    class="clickable-row"
+                    *ngFor="let member of pagedVisibleMembers(); trackBy: trackByMember"
+                    (click)="openUserActionsDrawer(member, selectedUnit.unitId, selectedUnit.unitName)">
+                    <td class="mono">{{ member.id }}</td>
+                    <td>
+                      <div class="name-cell">
+                        <span>{{ getMemberName(member) }}</span>
+                        <span class="role-inline-badge" *ngIf="isMemberUnitAdmin(member.id, selectedUnit.unitId)">
+                          Admin Unidad
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="pager" *ngIf="memberListTotalPages() > 1">
+                <button type="button" (click)="goToPreviousMemberPage()" [disabled]="memberListPage() === 1">Anterior</button>
+                <span>Página {{ memberListPage() }} de {{ memberListTotalPages() }}</span>
+                <button type="button" (click)="goToNextMemberPage()" [disabled]="memberListPage() === memberListTotalPages()">Siguiente</button>
+              </div>
+            </div>
+
+            <div class="empty" *ngIf="!membersLoading() && !membersError() && visibleMembers().length === 0">
+              No hay usuarios asociados a esta unidad.
+            </div>
+          </ng-container>
+
+          <ng-template #noUnitSelected>
+            <div class="empty big">Selecciona una unidad o un departamento para ver sus usuarios.</div>
+          </ng-template>
         </ng-template>
       </section>
     </div>

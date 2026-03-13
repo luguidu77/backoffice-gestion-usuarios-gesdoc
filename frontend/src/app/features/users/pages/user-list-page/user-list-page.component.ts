@@ -1,6 +1,7 @@
 ﻿import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { catchError, finalize, map, switchMap } from 'rxjs/operators';
 import { forkJoin, of } from 'rxjs';
 
@@ -107,6 +108,9 @@ export class UserListPageComponent implements OnInit {
   groupSearch = signal<string>('');
   expandedUnitId = signal<string | null>(null);
   selectedGroupId = signal<string | null>(null);
+  selectedUnitId = signal<string | null>(null);
+  selectedUnitName = signal<string>('');
+  isUnitContextLocked = signal<boolean>(false);
 
   members = signal<GroupMemberItem[]>([]);
   membersLoading = signal<boolean>(false);
@@ -114,6 +118,11 @@ export class UserListPageComponent implements OnInit {
   memberSearch = signal<string>('');
   memberNameById = signal<Record<string, string>>({});
   memberManagedSiteIdsByUser = signal<Record<string, string[]>>({});
+
+  unitListPage = signal<number>(1);
+  readonly unitListPageSize = 8;
+  memberListPage = signal<number>(1);
+  readonly memberListPageSize = 12;
 
   globalSearchTerm = signal<string>('');
   globalResults = signal<GlobalUserRow[]>([]);
@@ -215,6 +224,17 @@ export class UserListPageComponent implements OnInit {
       );
   });
 
+  unitListTotalPages = computed<number>(() => {
+    const total = this.unitMenus().length;
+    return Math.max(1, Math.ceil(total / this.unitListPageSize));
+  });
+
+  pagedUnitMenus = computed<UnitMenuView[]>(() => {
+    const allUnits = this.unitMenus();
+    const start = (this.unitListPage() - 1) * this.unitListPageSize;
+    return allUnits.slice(start, start + this.unitListPageSize);
+  });
+
   selectedDepartment = computed(() => {
     const selectedId = this.selectedGroupId();
     if (!selectedId) {
@@ -235,6 +255,26 @@ export class UserListPageComponent implements OnInit {
       member.id.toLowerCase().includes(term) ||
       (member.displayName || '').toLowerCase().includes(term)
     );
+  });
+
+  memberListTotalPages = computed<number>(() => {
+    const total = this.visibleMembers().length;
+    return Math.max(1, Math.ceil(total / this.memberListPageSize));
+  });
+
+  pagedVisibleMembers = computed<GroupMemberItem[]>(() => {
+    const allMembers = this.visibleMembers();
+    const start = (this.memberListPage() - 1) * this.memberListPageSize;
+    return allMembers.slice(start, start + this.memberListPageSize);
+  });
+
+  selectedUnitMenu = computed<UnitMenuView | null>(() => {
+    const selectedUnitId = this.selectedUnitId();
+    if (!selectedUnitId) {
+      return null;
+    }
+
+    return this.unitMenus().find(unit => unit.unitId === selectedUnitId) || null;
   });
 
   assignableDepartments = computed(() => {
@@ -365,10 +405,26 @@ export class UserListPageComponent implements OnInit {
     private groupService: GroupService,
     private userService: UserService,
     private siteService: SiteService,
-    private authService: AuthService
+    private authService: AuthService,
+    private route: ActivatedRoute
   ) { }
 
   ngOnInit(): void {
+    const preselectedUnitId = this.route.snapshot.queryParamMap.get('siteId');
+    const preselectedUnitName = this.route.snapshot.queryParamMap.get('siteName');
+
+    if (preselectedUnitId || preselectedUnitName) {
+      this.isUnitContextLocked.set(true);
+    }
+
+    if (preselectedUnitId) {
+      this.selectedUnitId.set(preselectedUnitId);
+    }
+
+    if (preselectedUnitName) {
+      this.selectedUnitName.set(preselectedUnitName);
+    }
+
     this.loadUnits();
     this.loadDepartments();
   }
@@ -438,22 +494,52 @@ export class UserListPageComponent implements OnInit {
 
   onGroupSearchChange(value: string): void {
     this.groupSearch.set(value);
+    this.unitListPage.set(1);
     this.ensureSelectedGroup();
+  }
+
+  onMemberSearchChange(value: string): void {
+    this.memberSearch.set(value);
+    this.memberListPage.set(1);
+  }
+
+  goToPreviousUnitPage(): void {
+    if (this.unitListPage() > 1) {
+      this.unitListPage.set(this.unitListPage() - 1);
+    }
+  }
+
+  goToNextUnitPage(): void {
+    if (this.unitListPage() < this.unitListTotalPages()) {
+      this.unitListPage.set(this.unitListPage() + 1);
+    }
+  }
+
+  goToPreviousMemberPage(): void {
+    if (this.memberListPage() > 1) {
+      this.memberListPage.set(this.memberListPage() - 1);
+    }
+  }
+
+  goToNextMemberPage(): void {
+    if (this.memberListPage() < this.memberListTotalPages()) {
+      this.memberListPage.set(this.memberListPage() + 1);
+    }
   }
 
   onUnitClick(unit: UnitMenuView): void {
     if (this.expandedUnitId() === unit.unitId) {
       this.expandedUnitId.set(null);
-      return;
+    } else {
+      this.expandedUnitId.set(unit.unitId);
     }
 
-    this.expandedUnitId.set(unit.unitId);
-
-    const selectedDepartment = this.selectedDepartment();
-    const selectedInUnit = selectedDepartment && unit.departments.some(department => department.id === selectedDepartment.id);
-    if (!selectedInUnit && unit.departments.length > 0) {
-      this.selectDepartment(unit.departments[0].id);
-    }
+    this.selectedUnitId.set(unit.unitId);
+    this.selectedUnitName.set(unit.unitName);
+    this.selectedGroupId.set(null);
+    this.memberSearch.set('');
+    this.memberListPage.set(1);
+    this.loadMembersForSelectedUnit();
   }
 
   isUnitExpanded(unitId: string): boolean {
@@ -464,6 +550,8 @@ export class UserListPageComponent implements OnInit {
     const selectedDepartment = this.departments().find(department => department.id === departmentId);
     if (selectedDepartment && selectedDepartment.unitId) {
       this.expandedUnitId.set(selectedDepartment.unitId);
+      this.selectedUnitId.set(selectedDepartment.unitId);
+      this.selectedUnitName.set(selectedDepartment.unitName);
     }
 
     if (this.selectedGroupId() === departmentId) {
@@ -472,9 +560,63 @@ export class UserListPageComponent implements OnInit {
 
     this.selectedGroupId.set(departmentId);
     this.memberSearch.set('');
+    this.memberListPage.set(1);
     this.actionError.set('');
     this.actionMessage.set('');
     this.loadMembersForSelectedGroup();
+  }
+
+  loadMembersForSelectedUnit(): void {
+    const selectedUnit = this.selectedUnitMenu();
+    if (!selectedUnit || selectedUnit.departments.length === 0) {
+      this.members.set([]);
+      this.membersError.set('No hay departamentos disponibles en esta unidad.');
+      return;
+    }
+
+    const memberRequests = selectedUnit.departments.map(department =>
+      this.groupService.getGroupMembers(department.id, 1000, 0).pipe(
+        map(response => response.members || []),
+        catchError(() => of([] as GroupMemberItem[]))
+      )
+    );
+
+    this.membersLoading.set(true);
+    this.membersError.set('');
+
+    forkJoin(memberRequests).subscribe({
+      next: (allMembers) => {
+        const mergedById = new Map<string, GroupMemberItem>();
+
+        for (const memberList of allMembers) {
+          for (const member of memberList) {
+            if (member.memberType !== 'PERSON') {
+              continue;
+            }
+
+            if (!mergedById.has(member.id)) {
+              mergedById.set(member.id, member);
+            }
+          }
+        }
+
+        const mergedMembers = Array.from(mergedById.values())
+          .sort((a, b) => a.id.localeCompare(b.id));
+
+        this.members.set(mergedMembers);
+        this.memberNameById.set({});
+        this.memberManagedSiteIdsByUser.set({});
+        this.enrichMemberNames(mergedMembers);
+        this.enrichMemberManagedSites(mergedMembers);
+        this.memberListPage.set(1);
+        this.membersLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Error cargando usuarios de la unidad:', err);
+        this.membersError.set('No se pudieron cargar los usuarios de la unidad seleccionada.');
+        this.membersLoading.set(false);
+      }
+    });
   }
 
   loadMembersForSelectedGroup(): void {
@@ -1344,11 +1486,28 @@ export class UserListPageComponent implements OnInit {
       return;
     }
 
+    const preferredUnit = this.resolvePreferredUnitFromNavigation();
+    if (preferredUnit) {
+        this.expandedUnitId.set(preferredUnit.unitId);
+        this.selectedUnitId.set(preferredUnit.unitId);
+        this.selectedUnitName.set(preferredUnit.unitName);
+
+        if (!selected || !preferredUnit.departments.some(department => department.id === selected)) {
+          this.selectedGroupId.set(null);
+          this.memberSearch.set('');
+          this.memberListPage.set(1);
+          this.loadMembersForSelectedUnit();
+          return;
+        }
+    }
+
     const exists = selected && groups.some(group => group.id === selected);
     if (!exists) {
       this.selectedGroupId.set(groups[0].id);
       if (groups[0].unitId) {
         this.expandedUnitId.set(groups[0].unitId);
+        this.selectedUnitId.set(groups[0].unitId);
+        this.selectedUnitName.set(groups[0].unitName);
       }
       this.loadMembersForSelectedGroup();
       return;
@@ -1357,6 +1516,8 @@ export class UserListPageComponent implements OnInit {
     const selectedDepartment = groups.find(group => group.id === selected);
     if (selectedDepartment && selectedDepartment.unitId) {
       this.expandedUnitId.set(selectedDepartment.unitId);
+      this.selectedUnitId.set(selectedDepartment.unitId);
+      this.selectedUnitName.set(selectedDepartment.unitName);
     }
   }
 
@@ -1770,5 +1931,56 @@ export class UserListPageComponent implements OnInit {
 
   private isSiteManagerRole(role: string | null | undefined): boolean {
     return (role || '').trim().toLowerCase() === 'sitemanager';
+  }
+
+  private resolvePreferredUnitFromNavigation(): UnitMenuView | null {
+    const units = this.unitMenus();
+    if (units.length === 0) {
+      return null;
+    }
+
+    const rawUnitId = (this.selectedUnitId() || '').trim();
+    const rawUnitName = (this.selectedUnitName() || '').trim();
+
+    if (rawUnitId) {
+      const byIdExact = units.find(unit => unit.unitId.toUpperCase() === rawUnitId.toUpperCase());
+      if (byIdExact) {
+        return byIdExact;
+      }
+    }
+
+    const normalizedId = this.normalizeForComparison(rawUnitId);
+    if (normalizedId) {
+      const byIdNormalized = units.find(unit => this.normalizeForComparison(unit.unitId) === normalizedId);
+      if (byIdNormalized) {
+        return byIdNormalized;
+      }
+    }
+
+    const normalizedName = this.normalizeForComparison(rawUnitName);
+    if (normalizedName) {
+      const byNameExact = units.find(unit => this.normalizeForComparison(unit.unitName) === normalizedName);
+      if (byNameExact) {
+        return byNameExact;
+      }
+
+      const byNameContains = units.find(unit =>
+        this.normalizeForComparison(unit.unitName).includes(normalizedName) ||
+        normalizedName.includes(this.normalizeForComparison(unit.unitName))
+      );
+      if (byNameContains) {
+        return byNameContains;
+      }
+    }
+
+    return null;
+  }
+
+  private normalizeForComparison(value: string): string {
+    return (value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9]/g, '')
+      .toUpperCase();
   }
 }

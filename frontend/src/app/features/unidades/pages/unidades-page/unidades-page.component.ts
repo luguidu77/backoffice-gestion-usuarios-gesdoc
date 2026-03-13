@@ -22,6 +22,8 @@ export class UnidadesPageComponent implements OnInit, OnDestroy {
   totalSites = signal<number>(0);
   hasMore = signal<boolean>(false);
   searchTerm = signal<string>('');
+  currentPage = signal<number>(1);
+  readonly pageSize = 10;
 
   /** Rol del usuario en sesión */
   readonly userRole = this.authService.getUserRole();
@@ -52,6 +54,16 @@ export class UnidadesPageComponent implements OnInit, OnDestroy {
     );
   });
 
+  totalPages = computed<number>(() => {
+    const total = this.filteredSites().length;
+    return Math.max(1, Math.ceil(total / this.pageSize));
+  });
+
+  paginatedSites = computed(() => {
+    const start = (this.currentPage() - 1) * this.pageSize;
+    return this.filteredSites().slice(start, start + this.pageSize);
+  });
+
   private searchSubject = new Subject<string>();
   private searchSubscription?: Subscription;
 
@@ -65,7 +77,10 @@ export class UnidadesPageComponent implements OnInit, OnDestroy {
     this.searchSubscription = this.searchSubject.pipe(
       debounceTime(200),
       distinctUntilChanged()
-    ).subscribe(term => this.searchTerm.set(term));
+    ).subscribe(term => {
+      this.searchTerm.set(term);
+      this.currentPage.set(1);
+    });
 
     this.loadSites();
   }
@@ -82,6 +97,7 @@ export class UnidadesPageComponent implements OnInit, OnDestroy {
         this.sites.set(response.sites);
         this.totalSites.set(response.totalSites);
         this.hasMore.set(response.hasMore);
+        this.currentPage.set(1);
         this.loading.set(false);
       },
       error: (err: any) => {
@@ -146,5 +162,17 @@ export class UnidadesPageComponent implements OnInit, OnDestroy {
    */
   refresh(): void {
     this.loadSites();
+  }
+
+  previousPage(): void {
+    if (this.currentPage() > 1) {
+      this.currentPage.set(this.currentPage() - 1);
+    }
+  }
+
+  nextPage(): void {
+    if (this.currentPage() < this.totalPages()) {
+      this.currentPage.set(this.currentPage() + 1);
+    }
   }
 }

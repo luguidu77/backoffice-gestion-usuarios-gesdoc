@@ -299,6 +299,39 @@
     }
 }
 
+.pagination {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+
+    span {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    button {
+        border: 1px solid #dee2e6;
+        background: #ffffff;
+        color: #212529;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+
+        &:hover:not(:disabled) {
+            background: #f8f9fa;
+        }
+
+        &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    }
+}
+
 // Responsive
 @media (max-width: 768px) {
     .sites-list-container {
