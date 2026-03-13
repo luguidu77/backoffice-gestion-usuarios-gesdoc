@@ -254,7 +254,7 @@
     <div class="drawer-head">
       <div>
         <h3>Reasignacion de departamentos</h3>
-        <p *ngIf="selectedMember()">Usuario: <strong>{{ selectedMember()?.id }}</strong></p>
+        <p *ngIf="selectedMember() as member">Usuario: <strong>{{ getMemberName(member) || member.id }}</strong></p>
       </div>
       <button class="btn-close" (click)="closeReassignDrawer()">X</button>
     </div>
@@ -305,7 +305,7 @@
     <div class="drawer-head">
       <div>
         <h3>Reasignacion de Unidad</h3>
-        <p *ngIf="selectedMember()">Usuario: <strong>{{ selectedMember()?.id }}</strong></p>
+        <p *ngIf="selectedMember() as member">Usuario: <strong>{{ getMemberName(member) || member.id }}</strong></p>
       </div>
       <button class="btn-close" (click)="closeUnitReassignDrawer()">X</button>
     </div>
