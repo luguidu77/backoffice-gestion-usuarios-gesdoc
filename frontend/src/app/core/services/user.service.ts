@@ -7,8 +7,18 @@ import {
   GroupListResponse,
   UserSiteMembershipListResponse,
   UnitReassignmentProofPayload,
-  UnitReassignmentProofResponse
+  UnitReassignmentProofResponse,
+  UnitReassignmentAuditListResponse
 } from '../models/user.model';
+
+export interface UnitReassignmentAuditQuery {
+  userId?: string;
+  mode?: 'TRANSFER' | 'ADD' | 'DEPARTMENTS' | '';
+  fromDate?: string;
+  toDate?: string;
+  sort?: 'newest' | 'oldest' | 'user-asc' | 'user-desc';
+  includeMetadata?: boolean;
+}
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -99,11 +109,53 @@ export class UserService {
     for (const unitId of payload.finalUnitIds) {
       formData.append('finalUnitIds', unitId);
     }
+    if (payload.transferFromUnitId && payload.transferFromUnitId.trim().length > 0) {
+      formData.append('transferFromUnitId', payload.transferFromUnitId.trim());
+    }
 
     const encodedUserId = encodeURIComponent(userId);
     return this.http.post<UnitReassignmentProofResponse>(
       `${this.apiUrl}/${encodedUserId}/unit-reassignment-proof`,
       formData
     );
+  }
+
+  getUnitReassignmentAudits(
+    query?: UnitReassignmentAuditQuery,
+    maxItems: number = 20,
+    skipCount: number = 0
+  ): Observable<UnitReassignmentAuditListResponse> {
+    let params = new HttpParams()
+      .set('maxItems', maxItems.toString())
+      .set('skipCount', skipCount.toString());
+
+    const userId = query?.userId || '';
+    if (userId.trim().length > 0) {
+      params = params.set('userId', userId.trim());
+    }
+    if (query?.mode && query.mode.trim().length > 0) {
+      params = params.set('mode', query.mode);
+    }
+    if (query?.fromDate && query.fromDate.trim().length > 0) {
+      params = params.set('fromDate', query.fromDate.trim());
+    }
+    if (query?.toDate && query.toDate.trim().length > 0) {
+      params = params.set('toDate', query.toDate.trim());
+    }
+    if (query?.sort && query.sort.trim().length > 0) {
+      params = params.set('sort', query.sort);
+    }
+    if (query?.includeMetadata) {
+      params = params.set('includeMetadata', 'true');
+    }
+
+    return this.http.get<UnitReassignmentAuditListResponse>(`${this.apiUrl}/unit-reassignment-audits`, { params });
+  }
+
+  downloadUnitReassignmentAuditPdf(nodeId: string): Observable<Blob> {
+    const encodedNodeId = encodeURIComponent(nodeId);
+    return this.http.get(`${this.apiUrl}/unit-reassignment-audits/${encodedNodeId}/content`, {
+      responseType: 'blob'
+    });
   }
 }

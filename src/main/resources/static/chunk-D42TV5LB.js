@@ -1,0 +1,1 @@
+import{e as t,j as e}from"./chunk-PGXNA55I.js";import{T as r}from"./chunk-FWSKOC4T.js";var m=(u,o)=>{let i=r(t);return r(e).isAuthenticated()?!0:(console.warn("Usuario no autenticado. Redirigiendo a /login"),i.navigate(["/login"],{queryParams:{returnUrl:o.url}}),!1)};export{m as a};

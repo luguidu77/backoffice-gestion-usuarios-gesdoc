@@ -1,0 +1,1 @@
+import{a as o}from"./chunk-D42TV5LB.js";import"./chunk-PGXNA55I.js";import"./chunk-FWSKOC4T.js";import"./chunk-35PI25VP.js";var a=[{path:"",canActivate:[o],children:[{path:"",loadComponent:()=>import("./chunk-PYMJTOH3.js").then(t=>t.GroupsPageComponent)}]}];export{a as groupsRoutes};

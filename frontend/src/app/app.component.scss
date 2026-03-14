@@ -14,6 +14,16 @@
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+
+  &.no-sidebar {
+    .main-wrapper {
+      width: 100%;
+    }
+
+    .main-content.auth-page {
+      padding: 0;
+    }
+  }
 }
 
 /*

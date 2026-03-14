@@ -1,0 +1,181 @@
+.audit-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .page-header {
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.5rem;
+      color: #111827;
+    }
+
+    p {
+      margin: 0;
+      color: #6b7280;
+      font-size: 0.92rem;
+    }
+  }
+
+  .filter-card,
+  .table-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 14px;
+  }
+
+  .filter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+  }
+
+  .filter-row {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr 0.8fr 0.8fr 0.9fr auto auto;
+    gap: 8px;
+
+    input,
+    select {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-size: 0.92rem;
+      color: #111827;
+      background: #ffffff;
+    }
+  }
+
+  .table-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    color: #6b7280;
+    font-size: 0.86rem;
+  }
+
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 10px 8px;
+      font-size: 0.88rem;
+      color: #111827;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      color: #6b7280;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+    }
+  }
+
+  .detail-cell {
+    min-width: 280px;
+    color: #374151;
+    font-size: 0.84rem;
+  }
+
+  .pager {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .empty,
+  .loading {
+    padding: 12px;
+    color: #6b7280;
+    font-size: 0.9rem;
+  }
+
+  .alert {
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+
+    &.error {
+      border: 1px solid #fca5a5;
+      background: #fef2f2;
+      color: #991b1b;
+    }
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.86rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
+  }
+
+  .btn-secondary {
+    background: #ffffff;
+    color: #374151;
+  }
+
+  .btn-link {
+    border: none;
+    background: transparent;
+    color: #1d4ed8;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .action-cell {
+    width: 72px;
+  }
+
+  .pdf-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1f2937;
+    padding: 6px;
+    cursor: pointer;
+
+    &:hover {
+      background: #f9fafb;
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+  }
+}

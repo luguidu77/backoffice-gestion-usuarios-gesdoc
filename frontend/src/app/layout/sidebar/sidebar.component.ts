@@ -38,6 +38,10 @@ export class SidebarComponent {
     return role === 'GLOBAL_ADMIN' || role === 'UNIT_ADMIN';
   }
 
+  get canViewAudits(): boolean {
+    return this.authService.getUserRole() === 'GLOBAL_ADMIN';
+  }
+
   /** Rol legible del usuario para mostrar en UI. */
   get roleLabel(): string {
     const role = this.authService.getUserRole();

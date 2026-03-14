@@ -1,0 +1,117 @@
+<section class="audit-page">
+  <header class="page-header">
+    <h1>Auditoría de reasignaciones</h1>
+    <p>Consulta de justificantes PDF almacenados en Alfresco.</p>
+  </header>
+
+  <div class="alert error" *ngIf="!isGlobalAdmin()">
+    Esta pantalla está disponible solo para administradores globales.
+  </div>
+
+  <ng-container *ngIf="isGlobalAdmin()">
+    <section class="filter-card">
+      <form class="filter-form" (ngSubmit)="onFilterSubmit()">
+        <label for="audit-user-filter">Filtros de auditoría</label>
+        <div class="filter-row">
+          <input
+            id="audit-user-filter"
+            type="text"
+            [ngModel]="filterUserId()"
+            (ngModelChange)="filterUserId.set($event)"
+            name="filterUserId"
+            placeholder="Ej: L34168R" />
+          <select
+            [ngModel]="filterMode()"
+            (ngModelChange)="filterMode.set($event)"
+            name="filterMode"
+            aria-label="Filtrar por modo">
+            <option value="">Todos los modos</option>
+            <option value="TRANSFER">Traslado</option>
+            <option value="ADD">Alta en unidad</option>
+            <option value="DEPARTMENTS">Reasignación de departamentos</option>
+          </select>
+          <input
+            type="date"
+            [ngModel]="filterFromDate()"
+            (ngModelChange)="filterFromDate.set($event)"
+            name="filterFromDate"
+            aria-label="Fecha desde" />
+          <input
+            type="date"
+            [ngModel]="filterToDate()"
+            (ngModelChange)="filterToDate.set($event)"
+            name="filterToDate"
+            aria-label="Fecha hasta" />
+          <select
+            [ngModel]="sortOrder()"
+            (ngModelChange)="sortOrder.set($event)"
+            name="sortOrder"
+            aria-label="Orden">
+            <option value="newest">Más recientes</option>
+            <option value="oldest">Más antiguas</option>
+            <option value="user-asc">Usuario A-Z</option>
+            <option value="user-desc">Usuario Z-A</option>
+          </select>
+          <button type="submit" class="btn-primary" [disabled]="loading()">Buscar</button>
+          <button type="button" class="btn-secondary" (click)="resetFilter()" [disabled]="loading()">Limpiar</button>
+        </div>
+      </form>
+    </section>
+
+    <div class="alert error" *ngIf="error()">{{ error() }}</div>
+    <div class="loading" *ngIf="loading()">Cargando auditorías...</div>
+
+    <section class="table-card" *ngIf="!loading()">
+      <div class="table-meta">
+        <span>Total registros: <strong>{{ totalItems() }}</strong></span>
+        <span>Página: <strong>{{ page() }}</strong></span>
+      </div>
+
+      <table class="audit-table" *ngIf="audits().length > 0; else noAudits">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Fecha</th>
+            <th>Modo</th>
+            <th>Detalle de la operación</th>
+            <th>Archivo</th>
+            <th>Carpeta</th>
+            <th>Documento</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of audits()">
+            <td>{{ item.userId }}</td>
+            <td>{{ getFormattedDate(item.createdAt) }}</td>
+            <td>{{ getModeLabel(item.operationMode) }}</td>
+            <td class="detail-cell">{{ getAuditSummary(item) }}</td>
+            <td>{{ item.fileName }}</td>
+            <td>{{ item.folder }}</td>
+            <td class="action-cell">
+              <button
+                type="button"
+                class="pdf-icon-btn"
+                (click)="openAudit(item)"
+                [attr.aria-label]="'Abrir PDF: ' + item.fileName"
+                title="Abrir PDF">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                  <path d="M14 2v6h6"></path>
+                </svg>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <ng-template #noAudits>
+        <div class="empty">No hay auditorías para los filtros aplicados.</div>
+      </ng-template>
+
+      <div class="pager">
+        <button type="button" class="btn-secondary" (click)="goPrevious()" [disabled]="!canGoPrevious()">Anterior</button>
+        <button type="button" class="btn-secondary" (click)="goNext()" [disabled]="!canGoNext()">Siguiente</button>
+      </div>
+    </section>
+  </ng-container>
+</section>

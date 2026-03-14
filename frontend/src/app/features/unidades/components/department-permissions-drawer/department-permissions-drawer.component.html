@@ -13,7 +13,10 @@
                 <span class="node-name">{{ nodeName }}</span>
             </div>
         </div>
-        <button class="btn-close" (click)="onClose()" title="Cerrar">✖</button>
+        <div class="header-actions">
+            <button class="btn-help" (click)="isHelpOpen.set(true)" title="Ayuda">❓</button>
+            <button class="btn-close" (click)="onClose()" title="Cerrar">✖</button>
+        </div>
     </div>
 
     <!-- Content -->
@@ -30,13 +33,17 @@
             <span>⚠️</span> {{ error() }}
         </div>
 
+        <div *ngIf="!isGlobalAdmin && !loading()" class="alert alert-error">
+            <span>🔒</span> Solo el administrador global puede consultar y modificar estos permisos.
+        </div>
+
         <!-- Success -->
         <div *ngIf="successMessage()" class="alert alert-success">
             <span>✅</span> {{ successMessage() }}
         </div>
 
         <!-- Main Content -->
-        <ng-container *ngIf="!loading() && permissions()">
+        <ng-container *ngIf="!loading() && permissions() && isGlobalAdmin">
 
             <!-- Herencia de permisos -->
             <section class="section">
@@ -197,10 +204,29 @@
             </section>
 
         </ng-container>
+
+        <div class="help-modal-backdrop" *ngIf="isHelpOpen()" (click)="isHelpOpen.set(false)"></div>
+        <section class="help-modal" *ngIf="isHelpOpen()">
+            <header>
+                <h4>Cómo usar “Permisos del Departamento”</h4>
+                <button class="btn-close" (click)="isHelpOpen.set(false)" title="Cerrar">✖</button>
+            </header>
+            <div class="help-body">
+                <p><strong>¿Para qué sirve?</strong> Esta pantalla permite definir permisos propios sobre una carpeta (departamento) para usuarios o grupos concretos.</p>
+                <ol>
+                    <li><strong>Herencia de permisos:</strong> activada hereda del sitio padre; desactivada usa permisos propios de la carpeta.</li>
+                    <li><strong>Permisos heredados:</strong> son solo informativos y no se editan aquí.</li>
+                    <li><strong>Permisos propios:</strong> puedes añadir, cambiar rol o eliminar permisos locales.</li>
+                    <li><strong>Agregar permiso:</strong> busca un grupo/usuario, elige rol y acceso, luego pulsa “Agregar”.</li>
+                    <li><strong>Guardar cambios:</strong> confirma todos los ajustes realizados.</li>
+                </ol>
+                <p><strong>Nota:</strong> Solo disponible para administradores globales.</p>
+            </div>
+        </section>
     </div>
 
     <!-- Footer Actions -->
-    <div class="drawer-footer" *ngIf="permissions() && !loading()">
+    <div class="drawer-footer" *ngIf="permissions() && !loading() && isGlobalAdmin">
         <button class="btn-secondary" (click)="discardChanges()" [disabled]="!isModified() || saving()">
             Descartar
         </button>

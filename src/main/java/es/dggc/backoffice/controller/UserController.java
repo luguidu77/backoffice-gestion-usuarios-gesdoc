@@ -195,7 +195,8 @@ public class UserController {
             @RequestParam(value = "operationMode", required = false) String operationMode,
             @RequestParam(value = "fromUnitIds", required = false) List<String> fromUnitIds,
             @RequestParam(value = "targetUnitIds", required = false) List<String> targetUnitIds,
-            @RequestParam(value = "finalUnitIds", required = false) List<String> finalUnitIds) {
+            @RequestParam(value = "finalUnitIds", required = false) List<String> finalUnitIds,
+            @RequestParam(value = "transferFromUnitId", required = false) String transferFromUnitId) {
 
         log.info("Solicitud de subida de justificante de reasignacion de unidad para usuario {}", userId);
 
@@ -205,13 +206,16 @@ public class UserController {
         }
 
         try {
+            String token = authHeader.substring(6);
             Map<String, Object> response = alfrescoUserService.storeUnitReassignmentProof(
+                    token,
                     userId,
                     file,
                     operationMode,
                     fromUnitIds,
                     targetUnitIds,
-                    finalUnitIds);
+                    finalUnitIds,
+                    transferFromUnitId);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
             log.warn("Justificante invalido para usuario {}: {}", userId, e.getMessage());
@@ -220,6 +224,73 @@ public class UserController {
             log.error("Error guardando justificante para usuario {}: {}", userId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Collections.<String, Object>singletonMap("message", "No se pudo guardar el justificante."));
+        }
+    }
+
+    /**
+     * Endpoint para consultar auditorias de reasignaciones.
+     *
+     * GET /api/users/unit-reassignment-audits
+     */
+    @GetMapping("/unit-reassignment-audits")
+    public ResponseEntity<Map<String, Object>> listUnitReassignmentAudits(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestParam(value = "userId", required = false) String userId,
+            @RequestParam(value = "mode", required = false) String mode,
+            @RequestParam(value = "fromDate", required = false) String fromDate,
+            @RequestParam(value = "toDate", required = false) String toDate,
+            @RequestParam(value = "sort", required = false, defaultValue = "newest") String sort,
+            @RequestParam(value = "includeMetadata", required = false, defaultValue = "false") boolean includeMetadata,
+            @RequestParam(value = "maxItems", required = false, defaultValue = "100") Integer maxItems,
+            @RequestParam(value = "skipCount", required = false, defaultValue = "0") Integer skipCount) {
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Collections.<String, Object>emptyMap());
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            Map<String, Object> response = alfrescoUserService.listUnitReassignmentAudits(
+                    token,
+                    userId,
+                    mode,
+                    fromDate,
+                    toDate,
+                    sort,
+                    includeMetadata,
+                    maxItems,
+                    skipCount);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error consultando auditorias de reasignaciones: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Collections.<String, Object>singletonMap("message", "No se pudieron consultar las auditorias."));
+        }
+    }
+
+    /**
+     * Descarga/visualiza un PDF de auditoría de reasignación por nodeId.
+     *
+     * GET /api/users/unit-reassignment-audits/{nodeId}/content
+     */
+    @GetMapping("/unit-reassignment-audits/{nodeId}/content")
+    public ResponseEntity<byte[]> downloadUnitReassignmentAuditPdf(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String nodeId) {
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            return alfrescoUserService.downloadUnitReassignmentAuditPdf(token, nodeId);
+        } catch (HttpClientErrorException e) {
+            log.warn("Error descargando auditoria {}: {}", nodeId, e.getStatusCode());
+            return ResponseEntity.status(e.getStatusCode()).build();
+        } catch (Exception e) {
+            log.error("Error descargando auditoria {}: {}", nodeId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

@@ -62,6 +62,9 @@ Write-Host ""
 Write-Host "[4/4] Comprimiendo JAR para transferencia..." -ForegroundColor Yellow
 
 $zipPath = "$env:USERPROFILE\Desktop\admin-usuarios.zip"
+if (Test-Path $zipPath) {
+    Remove-Item -Force $zipPath
+}
 Compress-Archive -Force -Path ".\target\admin-usuarios.jar" -DestinationPath $zipPath
 
 $fileSize = (Get-Item $zipPath).Length / 1MB

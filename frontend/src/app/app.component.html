@@ -1,16 +1,16 @@
 <!-- Layout global de la aplicación con Sidebar Retráctil -->
-<div class="app-container">
+<div class="app-container" [class.no-sidebar]="!authService.isAuthenticated()">
   <!-- Menú lateral retractil -->
-  <app-sidebar></app-sidebar>
+  <app-sidebar *ngIf="authService.isAuthenticated()"></app-sidebar>
 
   <!-- Contenedor Derecho (Contenido + Footer) -->
   <div class="main-wrapper">
     <!-- Área de contenido principal -->
-    <main class="main-content">
+    <main class="main-content" [class.auth-page]="!authService.isAuthenticated()">
       <router-outlet></router-outlet>
     </main>
 
     <!-- Pie de página -->
-    <app-footer></app-footer>
+    <app-footer *ngIf="authService.isAuthenticated()"></app-footer>
   </div>
 </div>

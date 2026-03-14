@@ -40,7 +40,7 @@ export interface UserSiteMembershipListResponse {
   totalItems: number;
 }
 
-export type UnitReassignmentMode = 'TRANSFER' | 'ADD';
+export type UnitReassignmentMode = 'TRANSFER' | 'ADD' | 'DEPARTMENTS';
 
 export interface UnitReassignmentProofPayload {
   file: File;
@@ -48,6 +48,7 @@ export interface UnitReassignmentProofPayload {
   fromUnitIds: string[];
   targetUnitIds: string[];
   finalUnitIds: string[];
+  transferFromUnitId?: string;
 }
 
 export interface UnitReassignmentProofResponse {
@@ -62,4 +63,23 @@ export interface UnitReassignmentProofResponse {
   metadataPath: string;
   size: number;
   createdAt: string;
+}
+
+export interface UnitReassignmentAuditItem {
+  fileName: string;
+  nodeId: string;
+  metadataNodeId?: string;
+  folder: string;
+  userId: string;
+  operationMode?: string;
+  createdAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UnitReassignmentAuditListResponse {
+  items: UnitReassignmentAuditItem[];
+  totalItems: number;
+  hasMore: boolean;
+  skipCount: number;
+  maxItems: number;
 }

@@ -7,6 +7,11 @@ export const usersRoutes: Routes = [
     canActivate: [authGuard],
     children: [
       {
+        path: 'auditoria',
+        loadComponent: () => import('./pages/user-audit-page/user-audit-page.component')
+          .then(m => m.UserAuditPageComponent)
+      },
+      {
         path: '',
         loadComponent: () => import('./pages/user-list-page/user-list-page.component')
           .then(m => m.UserListPageComponent)

@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/nodes")
 @CrossOrigin(origins = "*")
@@ -99,6 +101,75 @@ public class NodeController {
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             log.error("Error actualizando permisos del nodo {}: {}", nodeId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/sites/{siteId}/departments")
+    public ResponseEntity<?> createDepartment(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String siteId,
+            @RequestBody Map<String, String> request) {
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autorizado");
+        }
+
+        String name = request != null ? request.get("name") : null;
+        if (name == null || name.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("El nombre del departamento es obligatorio");
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            DepartmentListResponse.DepartmentDto created = nodeService.createDepartment(token, siteId, name);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (RuntimeException e) {
+            log.error("Error creando departamento en sitio {}: {}", siteId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @PutMapping("/{nodeId}/name")
+    public ResponseEntity<?> renameDepartment(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String nodeId,
+            @RequestBody Map<String, String> request) {
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autorizado");
+        }
+
+        String name = request != null ? request.get("name") : null;
+        if (name == null || name.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("El nuevo nombre es obligatorio");
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            nodeService.renameDepartment(token, nodeId, name);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            log.error("Error renombrando departamento {}: {}", nodeId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{nodeId}")
+    public ResponseEntity<?> deleteDepartment(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String nodeId) {
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autorizado");
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            nodeService.deleteDepartment(token, nodeId);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            log.error("Error eliminando departamento {}: {}", nodeId, e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }

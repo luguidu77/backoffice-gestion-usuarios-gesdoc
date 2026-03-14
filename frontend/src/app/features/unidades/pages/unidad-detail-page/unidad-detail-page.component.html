@@ -1,11 +1,5 @@
 <div class="site-detail-container">
     <div class="page-header">
-        <div class="breadcrumbs">
-            <a routerLink="/unidades" class="breadcrumb-link">Unidades</a>
-            <span class="separator">></span>
-            <span class="current">{{ siteName() || siteId() }}</span>
-        </div>
-
         <div class="header-main">
             <div class="title-area">
                 <div class="icon">🏢</div>
@@ -54,9 +48,6 @@
             <div class="metadata-card">
                 <div class="card-header">
                     <h3>Miembros y Roles</h3>
-                    <button class="btn-primary" *ngIf="isGlobalAdmin()">
-                        <span class="icon">➕</span> Añadir Miembro
-                    </button>
                 </div>
 
                 <div *ngIf="loadingMembers()" class="loading-state">
@@ -78,11 +69,11 @@
                                 <th>Email</th>
                                 <th>Estado</th>
                                 <th>Rol en Unidad</th>
-                                <th *ngIf="isGlobalAdmin()">Acciones</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr *ngFor="let member of members()">
+                            <tr *ngFor="let member of paginatedMembers()" class="clickable-row" (click)="openUserDetailsDrawer(member)">
                                 <td class="id-cell">
                                     <div class="avatar">{{ member.firstName.charAt(0) }}{{ member.lastName ?
                                         member.lastName.charAt(0) : '' }}</div>
@@ -99,13 +90,20 @@
                                 <td>
                                     <span class="role-badge generic">Miembro Genérico</span>
                                 </td>
-                                <td class="actions-cell" *ngIf="isGlobalAdmin()">
-                                    <button class="btn-icon" title="Editar Rol">✏️</button>
-                                    <button class="btn-icon danger" title="Expulsar">🗑️</button>
+                                <td class="actions-cell">
+                                    <button class="btn-icon" title="Ver detalle" (click)="$event.stopPropagation(); openUserDetailsDrawer(member)">⚙️</button>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+
+                    <div class="table-pager" *ngIf="members().length > 0 && membersTotalPages() > 1">
+                        <span>Página {{ membersCurrentPage() }} de {{ membersTotalPages() }}</span>
+                        <div class="pager-actions">
+                            <button class="btn-retry" (click)="previousMembersPage()" [disabled]="membersCurrentPage() === 1">Anterior</button>
+                            <button class="btn-retry" (click)="nextMembersPage()" [disabled]="membersCurrentPage() === membersTotalPages()">Siguiente</button>
+                        </div>
+                    </div>
 
                     <div *ngIf="members().length === 0" class="empty-state">
                         <div class="empty-icon">👥</div>
@@ -124,4 +122,67 @@
             </div>
         </div>
     </div>
+
+    <aside class="drawer" [class.open]="isUserDrawerOpen()">
+        <div class="drawer-head">
+            <div>
+                <h3>Ficha de usuario</h3>
+                <p *ngIf="selectedMember() as member">Usuario: <strong>{{ member.id }}</strong></p>
+            </div>
+            <button class="btn-close" (click)="closeUserDetailsDrawer()">X</button>
+        </div>
+
+        <div class="drawer-body">
+            <div *ngIf="userDetailsLoading()" class="loading-state compact">
+                <div class="spinner"></div>
+                <p>Cargando detalle del usuario...</p>
+            </div>
+
+            <div *ngIf="userDetailsError()" class="error-message">
+                <span class="icon">⚠️</span> {{ userDetailsError() }}
+            </div>
+
+            <ng-container *ngIf="!userDetailsLoading() && !userDetailsError() && selectedMember() as member">
+                <div class="summary-grid">
+                    <article class="summary-card">
+                        <h4>TIP</h4>
+                        <p>{{ member.id }}</p>
+                    </article>
+                    <article class="summary-card">
+                        <h4>Nombre</h4>
+                        <p>{{ member.firstName }} {{ member.lastName }}</p>
+                    </article>
+                    <article class="summary-card">
+                        <h4>Email</h4>
+                        <p>{{ member.email || '—' }}</p>
+                    </article>
+                    <article class="summary-card">
+                        <h4>Rol en esta unidad</h4>
+                        <p>{{ userRoleInCurrentSite() }}</p>
+                    </article>
+                </div>
+
+                <section class="membership-section">
+                    <h4>Unidades y departamentos</h4>
+
+                    <div class="unit-membership-grid" *ngIf="userUnits().length > 0; else noMemberships">
+                        <article class="unit-membership-card" *ngFor="let unit of userUnits()">
+                            <p class="unit-title">{{ unit.siteName }}</p>
+                            <p class="unit-meta">{{ unit.siteId }} · {{ unit.role }}</p>
+                            <div class="chips" *ngIf="unit.departments.length > 0">
+                                <span class="chip" *ngFor="let department of unit.departments">{{ department }}</span>
+                            </div>
+                            <p class="muted" *ngIf="unit.departments.length === 0">Sin departamentos asignados.</p>
+                        </article>
+                    </div>
+
+                    <ng-template #noMemberships>
+                        <p class="muted">No hay unidades/departamentos asociados a este usuario.</p>
+                    </ng-template>
+                </section>
+            </ng-container>
+        </div>
+    </aside>
+
+    <div class="drawer-backdrop" *ngIf="isUserDrawerOpen()" (click)="closeUserDetailsDrawer()"></div>
 </div>

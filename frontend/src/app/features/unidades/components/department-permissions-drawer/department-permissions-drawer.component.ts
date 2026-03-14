@@ -22,6 +22,7 @@ export class DepartmentPermissionsDrawerComponent implements OnChanges {
     @Input() nodeId: string | null = null;
     @Input() nodeName: string = '';
     @Input() isOpen: boolean = false;
+    @Input() isGlobalAdmin: boolean = false;
 
     @Output() closeDrawer = new EventEmitter<void>();
     @Output() permissionsUpdated = new EventEmitter<void>();
@@ -34,6 +35,7 @@ export class DepartmentPermissionsDrawerComponent implements OnChanges {
     saving = signal(false);
     error = signal('');
     successMessage = signal('');
+    isHelpOpen = signal(false);
 
     // Search groups state
     searchingGroups = signal(false);
@@ -64,6 +66,10 @@ export class DepartmentPermissionsDrawerComponent implements OnChanges {
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['isOpen'] && this.isOpen && this.nodeId) {
+            if (!this.isGlobalAdmin) {
+                this.error.set('Solo el administrador global puede ver y editar permisos de departamentos.');
+                return;
+            }
             this.loadPermissions();
             this.loadGroups();
         }
@@ -112,6 +118,9 @@ export class DepartmentPermissionsDrawerComponent implements OnChanges {
     }
 
     addPermission(): void {
+        if (!this.isGlobalAdmin) {
+            return;
+        }
         const authorityId = this.newPermAuthority();
         if (!authorityId) return;
 
@@ -136,20 +145,32 @@ export class DepartmentPermissionsDrawerComponent implements OnChanges {
     }
 
     removePermission(authorityId: string): void {
+        if (!this.isGlobalAdmin) {
+            return;
+        }
         this.localPermissions.update(list => list.filter(p => p.authorityId !== authorityId));
     }
 
     updatePermissionRole(authorityId: string, newRole: string): void {
+        if (!this.isGlobalAdmin) {
+            return;
+        }
         this.localPermissions.update(list =>
             list.map(p => p.authorityId === authorityId ? { ...p, name: newRole } : p)
         );
     }
 
     toggleInheritance(): void {
+        if (!this.isGlobalAdmin) {
+            return;
+        }
         this.inheritanceEnabled.update(v => !v);
     }
 
     save(): void {
+        if (!this.isGlobalAdmin) {
+            return;
+        }
         if (!this.nodeId || !this.isModified()) return;
         this.saving.set(true);
         this.error.set('');
@@ -183,6 +204,9 @@ export class DepartmentPermissionsDrawerComponent implements OnChanges {
     }
 
     discardChanges(): void {
+        if (!this.isGlobalAdmin) {
+            return;
+        }
         const original = this.permissions();
         if (!original) return;
         this.localPermissions.set([...original.locallySet]);
@@ -206,6 +230,7 @@ export class DepartmentPermissionsDrawerComponent implements OnChanges {
         this.localPermissions.set([]);
         this.error.set('');
         this.successMessage.set('');
+        this.isHelpOpen.set(false);
         this.newPermAuthority.set('');
         this.newPermRole.set('Contributor');
         this.newPermAccess.set('ALLOWED');

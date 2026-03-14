@@ -109,6 +109,10 @@ public class GroupController {
             groupService.addPersonToGroup(token, groupId, userId);
             return ResponseEntity.noContent().build();
         } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.CONFLICT) {
+                log.info("Usuario {} ya pertenece al grupo {}. Se considera exito idempotente.", userId, groupId);
+                return ResponseEntity.noContent().build();
+            }
             log.warn("Error HTTP anadiendo usuario {} a grupo {}: {}", userId, groupId, e.getStatusCode());
             return ResponseEntity.status(e.getStatusCode()).build();
         } catch (RuntimeException e) {
@@ -139,6 +143,10 @@ public class GroupController {
             groupService.removePersonFromGroup(token, groupId, userId);
             return ResponseEntity.noContent().build();
         } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                log.info("Usuario {} no estaba en el grupo {}. Se considera exito idempotente.", userId, groupId);
+                return ResponseEntity.noContent().build();
+            }
             log.warn("Error HTTP quitando usuario {} de grupo {}: {}", userId, groupId, e.getStatusCode());
             return ResponseEntity.status(e.getStatusCode()).build();
         } catch (RuntimeException e) {
@@ -173,6 +181,10 @@ public class GroupController {
             groupService.addPersonToGroup(token, groupId, userId);
             return ResponseEntity.noContent().build();
         } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.CONFLICT) {
+                log.info("Usuario {} ya pertenece al grupo {}. Se considera exito idempotente.", userId, groupId);
+                return ResponseEntity.noContent().build();
+            }
             log.warn("Error HTTP anadiendo usuario {} a grupo {}: {}", userId, groupId, e.getStatusCode());
             return ResponseEntity.status(e.getStatusCode()).build();
         } catch (RuntimeException e) {
@@ -204,6 +216,10 @@ public class GroupController {
             groupService.removePersonFromGroup(token, groupId, userId);
             return ResponseEntity.noContent().build();
         } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                log.info("Usuario {} no estaba en el grupo {}. Se considera exito idempotente.", userId, groupId);
+                return ResponseEntity.noContent().build();
+            }
             log.warn("Error HTTP quitando usuario {} de grupo {}: {}", userId, groupId, e.getStatusCode());
             return ResponseEntity.status(e.getStatusCode()).build();
         } catch (RuntimeException e) {

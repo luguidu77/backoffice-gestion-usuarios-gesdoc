@@ -145,7 +145,7 @@ export class UnidadesPageComponent implements OnInit, OnDestroy {
    */
   viewMembers(siteId: string, siteName?: string): void {
     if (this.canManageUnit()) {
-      this.router.navigate(['/users'], { queryParams: { siteId, siteName } });
+      this.router.navigate(['/unidades', siteId], { queryParams: { siteName, tab: 'departamentos' } });
     }
   }
 

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+    Department,
     DepartmentListResponse,
     NodePermissionsResponse,
     UpdateNodePermissionsRequest
@@ -23,14 +24,30 @@ export class DepartmentService {
         maxItems: number = 100,
         skipCount: number = 0
     ): Observable<DepartmentListResponse> {
+        const encodedSiteId = encodeURIComponent(siteId);
         const params = new HttpParams()
             .set('maxItems', maxItems.toString())
             .set('skipCount', skipCount.toString());
 
         return this.http.get<DepartmentListResponse>(
-            `${this.API_URL}/sites/${siteId}/departments`,
+            `${this.API_URL}/sites/${encodedSiteId}/departments`,
             { params }
         );
+    }
+
+    createDepartment(siteId: string, name: string): Observable<Department> {
+        const encodedSiteId = encodeURIComponent(siteId);
+        return this.http.post<Department>(`${this.API_URL}/sites/${encodedSiteId}/departments`, { name });
+    }
+
+    renameDepartment(nodeId: string, name: string): Observable<void> {
+        const encodedNodeId = encodeURIComponent(nodeId);
+        return this.http.put<void>(`${this.API_URL}/${encodedNodeId}/name`, { name });
+    }
+
+    deleteDepartment(nodeId: string): Observable<void> {
+        const encodedNodeId = encodeURIComponent(nodeId);
+        return this.http.delete<void>(`${this.API_URL}/${encodedNodeId}`);
     }
 
     /**

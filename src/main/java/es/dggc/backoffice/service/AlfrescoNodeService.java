@@ -3,6 +3,7 @@ package es.dggc.backoffice.service;
 import es.dggc.backoffice.config.AlfrescoProperties;
 import es.dggc.backoffice.model.dto.AlfrescoNodeListResponse;
 import es.dggc.backoffice.model.dto.AlfrescoNodeSingleResponse;
+import es.dggc.backoffice.model.dto.AlfrescoSitesListResponse;
 import es.dggc.backoffice.model.dto.DepartmentListResponse;
 import es.dggc.backoffice.model.dto.NodePermissionsResponse;
 import es.dggc.backoffice.model.dto.NodePermissionsResponse.PermissionEntry;
@@ -49,73 +50,31 @@ public class AlfrescoNodeService {
      */
     public DepartmentListResponse listSiteDepartments(String basicAuthToken, String siteId, Integer maxItems,
             Integer skipCount) {
+        String effectiveSiteId = siteId;
+
         try {
             log.info("Obteniendo departamentos (carpetas) para el documentLibrary del sitio {}", siteId);
 
-            // Usamos el alias -root- de documentLibrary asociado al sitio
-            String url = alfrescoProperties.getBaseUrl() +
-                    "/api/-default-/public/alfresco/versions/1/nodes/" +
-                    "-root-/children?relativePath=Sites/" + siteId + "/documentLibrary" +
-                    "&where=(isFolder=true)";
-
-            // Añadimos la inclusión de permisos para ver la herencia
-            url += "&include=permissions";
-
-            if (maxItems != null)
-                url += "&maxItems=" + maxItems;
-            if (skipCount != null)
-                url += "&skipCount=" + skipCount;
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Basic " + basicAuthToken);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-
-            ResponseEntity<AlfrescoNodeListResponse> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, AlfrescoNodeListResponse.class);
-
-            AlfrescoNodeListResponse alfrescoResponse = response.getBody();
-            if (response.getStatusCode() == HttpStatus.OK && alfrescoResponse != null) {
-                List<DepartmentListResponse.DepartmentDto> departments = new ArrayList<>();
-
-                if (alfrescoResponse.getList() != null && alfrescoResponse.getList().getEntries() != null) {
-                    departments = alfrescoResponse.getList().getEntries().stream()
-                            .filter(wrapper -> wrapper.getEntry() != null)
-                            .map(wrapper -> {
-                                AlfrescoNodeListResponse.NodeEntry node = wrapper.getEntry();
-
-                                boolean inherits = true;
-                                if (node.getPermissions() != null) {
-                                    inherits = node.getPermissions().isInheritanceEnabled();
-                                }
-
-                                return new DepartmentListResponse.DepartmentDto(
-                                        node.getId(),
-                                        node.getName(),
-                                        node.getParentId(),
-                                        siteId,
-                                        inherits);
-                            })
-                            .collect(Collectors.toList());
-                }
-
-                Integer totalItems = alfrescoResponse.getList() != null &&
-                        alfrescoResponse.getList().getPagination() != null
-                                ? alfrescoResponse.getList().getPagination().getTotalItems()
-                                : departments.size();
-
-                Boolean hasMore = alfrescoResponse.getList() != null &&
-                        alfrescoResponse.getList().getPagination() != null
-                                ? alfrescoResponse.getList().getPagination().isHasMoreItems()
-                                : false;
-
-                return new DepartmentListResponse(departments, totalItems, hasMore);
-            }
-
-            return new DepartmentListResponse(new ArrayList<>(), 0, false);
+            AlfrescoNodeListResponse alfrescoResponse = requestDepartments(basicAuthToken, effectiveSiteId, maxItems, skipCount);
+            return mapDepartments(alfrescoResponse, effectiveSiteId);
 
         } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                String resolvedSiteId = resolveSiteIdByMetadata(basicAuthToken, siteId);
+                if (resolvedSiteId != null && !resolvedSiteId.equalsIgnoreCase(siteId)) {
+                    try {
+                        log.info("Reintentando departamentos con siteId resuelto {} para solicitud original {}", resolvedSiteId,
+                                siteId);
+                        AlfrescoNodeListResponse retryResponse = requestDepartments(basicAuthToken, resolvedSiteId, maxItems,
+                                skipCount);
+                        return mapDepartments(retryResponse, resolvedSiteId);
+                    } catch (Exception retryException) {
+                        log.error("Error en reintento de departamentos para sitio {}: {}", resolvedSiteId,
+                                retryException.getMessage());
+                    }
+                }
+            }
+
             log.error("Error HTTP al obtener departamentos del sitio {}: {} - {}", siteId, e.getStatusCode(),
                     e.getMessage());
             return new DepartmentListResponse(new ArrayList<>(), 0, false);
@@ -123,6 +82,154 @@ public class AlfrescoNodeService {
             log.error("Error inesperado al obtener departamentos del sitio {}: {}", siteId, e.getMessage(), e);
             return new DepartmentListResponse(new ArrayList<>(), 0, false);
         }
+    }
+
+    private AlfrescoNodeListResponse requestDepartments(String basicAuthToken, String siteId, Integer maxItems,
+            Integer skipCount) {
+        String documentLibraryNodeId = resolveDocumentLibraryNodeId(basicAuthToken, siteId);
+
+        String url = alfrescoProperties.getBaseUrl() +
+            "/api/-default-/public/alfresco/versions/1/nodes/" +
+            documentLibraryNodeId +
+            "/children?where=(isFolder=true)&include=permissions";
+
+        if (maxItems != null) {
+            url += "&maxItems=" + maxItems;
+        }
+        if (skipCount != null) {
+            url += "&skipCount=" + skipCount;
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Basic " + basicAuthToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        ResponseEntity<AlfrescoNodeListResponse> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, AlfrescoNodeListResponse.class);
+
+        return response.getBody() != null ? response.getBody() : new AlfrescoNodeListResponse();
+    }
+
+    private String resolveDocumentLibraryNodeId(String basicAuthToken, String siteId) {
+        String url = alfrescoProperties.getBaseUrl() +
+                "/api/-default-/public/alfresco/versions/1/sites/" + siteId + "/containers/documentLibrary";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Basic " + basicAuthToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        ResponseEntity<AlfrescoNodeSingleResponse> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, AlfrescoNodeSingleResponse.class);
+
+        AlfrescoNodeSingleResponse body = response.getBody();
+        if (body == null || body.getEntry() == null || body.getEntry().getId() == null
+                || body.getEntry().getId().trim().isEmpty()) {
+            throw new RuntimeException("No se pudo resolver el contenedor documentLibrary para el sitio " + siteId);
+        }
+
+        return body.getEntry().getId().trim();
+    }
+
+    private DepartmentListResponse mapDepartments(AlfrescoNodeListResponse alfrescoResponse, String siteId) {
+        List<DepartmentListResponse.DepartmentDto> departments = new ArrayList<>();
+
+        if (alfrescoResponse != null && alfrescoResponse.getList() != null
+                && alfrescoResponse.getList().getEntries() != null) {
+            departments = alfrescoResponse.getList().getEntries().stream()
+                    .filter(wrapper -> wrapper.getEntry() != null)
+                    .map(wrapper -> {
+                        AlfrescoNodeListResponse.NodeEntry node = wrapper.getEntry();
+
+                        boolean inherits = true;
+                        if (node.getPermissions() != null) {
+                            inherits = node.getPermissions().isInheritanceEnabled();
+                        }
+
+                        return new DepartmentListResponse.DepartmentDto(
+                                node.getId(),
+                                node.getName(),
+                                node.getParentId(),
+                                siteId,
+                                inherits);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        Integer totalItems = alfrescoResponse != null && alfrescoResponse.getList() != null
+                && alfrescoResponse.getList().getPagination() != null
+                        ? alfrescoResponse.getList().getPagination().getTotalItems()
+                        : departments.size();
+
+        Boolean hasMore = alfrescoResponse != null && alfrescoResponse.getList() != null
+                && alfrescoResponse.getList().getPagination() != null
+                        ? alfrescoResponse.getList().getPagination().isHasMoreItems()
+                        : false;
+
+        return new DepartmentListResponse(departments, totalItems, hasMore);
+    }
+
+    private String resolveSiteIdByMetadata(String basicAuthToken, String providedSiteId) {
+        try {
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/sites?maxItems=1000&skipCount=0";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<AlfrescoSitesListResponse> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, AlfrescoSitesListResponse.class);
+
+            AlfrescoSitesListResponse body = response.getBody();
+            if (body == null || body.getList() == null || body.getList().getEntries() == null) {
+                return null;
+            }
+
+            String normalizedInput = normalizeKey(providedSiteId);
+
+            for (AlfrescoSitesListResponse.SiteEntryWrapper wrapper : body.getList().getEntries()) {
+                AlfrescoSitesListResponse.SiteEntry entry = wrapper.getEntry();
+                if (entry == null) {
+                    continue;
+                }
+
+                if (equalsIgnoreCase(entry.getId(), providedSiteId)) {
+                    return entry.getId();
+                }
+
+                if (normalizedInput.equals(normalizeKey(entry.getTitle()))
+                        || normalizedInput.equals(normalizeKey(entry.getDescription()))
+                        || normalizedInput.equals(normalizeKey(entry.getId()))) {
+                    return entry.getId();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo resolver siteId alternativo para {}: {}", providedSiteId, e.getMessage());
+        }
+
+        return null;
+    }
+
+    private boolean equalsIgnoreCase(String left, String right) {
+        return left != null && right != null && left.equalsIgnoreCase(right);
+    }
+
+    private String normalizeKey(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.toUpperCase()
+                .replace("Á", "A")
+                .replace("É", "E")
+                .replace("Í", "I")
+                .replace("Ó", "O")
+                .replace("Ú", "U")
+                .replace("Ü", "U")
+                .replace("Ñ", "N")
+                .replaceAll("[^A-Z0-9]", "");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -244,5 +351,91 @@ public class AlfrescoNodeService {
                     ? authorityId.substring(6) : authorityId;
             return new PermissionEntry(authorityId, displayName, type, p.getName(), p.getAccessStatus());
         }).collect(Collectors.toList());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // GESTIÓN DE DEPARTAMENTOS (CARPETAS)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public DepartmentListResponse.DepartmentDto createDepartment(String basicAuthToken, String siteId, String name) {
+        String normalizedName = name == null ? "" : name.trim();
+        if (normalizedName.isEmpty()) {
+            throw new RuntimeException("El nombre del departamento es obligatorio");
+        }
+
+        try {
+            String documentLibraryNodeId = resolveDocumentLibraryNodeId(basicAuthToken, siteId);
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/nodes/" + documentLibraryNodeId + "/children";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("name", normalizedName);
+            body.put("nodeType", "cm:folder");
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<AlfrescoNodeSingleResponse> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, AlfrescoNodeSingleResponse.class);
+
+            AlfrescoNodeSingleResponse payload = response.getBody();
+            if (payload == null || payload.getEntry() == null) {
+                throw new RuntimeException("Alfresco no devolvió datos al crear el departamento");
+            }
+
+            AlfrescoNodeListResponse.NodeEntry entry = payload.getEntry();
+            boolean inherits = entry.getPermissions() == null || entry.getPermissions().isInheritanceEnabled();
+
+            return new DepartmentListResponse.DepartmentDto(
+                    entry.getId(),
+                    entry.getName(),
+                    entry.getParentId(),
+                    siteId,
+                    inherits);
+        } catch (Exception e) {
+            log.error("Error creando departamento '{}' en sitio {}: {}", normalizedName, siteId, e.getMessage(), e);
+            throw new RuntimeException("No se pudo crear el departamento", e);
+        }
+    }
+
+    public void renameDepartment(String basicAuthToken, String nodeId, String newName) {
+        String normalizedName = newName == null ? "" : newName.trim();
+        if (normalizedName.isEmpty()) {
+            throw new RuntimeException("El nuevo nombre es obligatorio");
+        }
+
+        try {
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/nodes/" + nodeId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("name", normalizedName);
+
+            restTemplate.exchange(url, HttpMethod.PUT, new HttpEntity<>(body, headers), Void.class);
+        } catch (Exception e) {
+            log.error("Error renombrando departamento {} a '{}': {}", nodeId, normalizedName, e.getMessage(), e);
+            throw new RuntimeException("No se pudo renombrar el departamento", e);
+        }
+    }
+
+    public void deleteDepartment(String basicAuthToken, String nodeId) {
+        try {
+            String url = alfrescoProperties.getBaseUrl() +
+                    "/api/-default-/public/alfresco/versions/1/nodes/" + nodeId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+
+            restTemplate.exchange(url, HttpMethod.DELETE, new HttpEntity<>(headers), Void.class);
+        } catch (Exception e) {
+            log.error("Error eliminando departamento {}: {}", nodeId, e.getMessage(), e);
+            throw new RuntimeException("No se pudo eliminar el departamento", e);
+        }
     }
 }

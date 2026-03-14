@@ -37,7 +37,6 @@
             <table class="sites-table" *ngIf="filteredSites().length > 0">
                 <thead>
                     <tr>
-                        <th>TIP</th>
                         <th>Nº DIR3</th>
                         <th>UNIDAD</th>
                         <th>Visibilidad</th>
@@ -48,8 +47,7 @@
                     <tr *ngFor="let site of paginatedSites()" (click)="viewMembers(site.id, site.description || site.title)"
                         class="site-row" title="Ver miembros de este sitio">
                         <td class="id-column">{{ site.id }}</td>
-                        <td class="title-column">{{ site.description || site.title || site.id }}</td>
-                        <td class="description-column">{{ site.description || '-' }}</td>
+                        <td class="title-column">{{ site.description || site.title || '-' }}</td>
                         <td class="visibility-column">
                             <span class="visibility-badge" [ngClass]="getVisibilityClass(site.visibility)">
                                 {{ getVisibilityLabel(site.visibility) }}

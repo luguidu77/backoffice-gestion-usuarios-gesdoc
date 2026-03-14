@@ -3,7 +3,7 @@
         <h3>Departamentos (Área Documental)</h3>
         <div class="actions">
             <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">🔄 Actualizar</button>
-            <button class="btn-primary" *ngIf="isGlobalAdmin">➕ Nuevo Departamento</button>
+            <button class="btn-primary" *ngIf="isGlobalAdmin" (click)="openCreateDialog()">➕ Nuevo Departamento</button>
         </div>
     </div>
 
@@ -30,7 +30,7 @@
                 </tr>
             </thead>
             <tbody>
-                <tr *ngFor="let dept of departments()">
+                <tr *ngFor="let dept of paginatedDepartments()">
                     <td class="name-cell">
                         <div class="folder-icon">📁</div>
                         <div class="dept-info">
@@ -46,28 +46,103 @@
                     </td>
                     <td class="actions-cell" *ngIf="isGlobalAdmin">
                         <button class="btn-icon" title="Editar Permisos" (click)="openPermissionsDrawer(dept)">🔐</button>
-                        <button class="btn-icon" title="Renombrar">✏️</button>
-                        <button class="btn-icon danger" title="Eliminar">🗑️</button>
+                        <button class="btn-icon" title="Renombrar" (click)="openRenameDialog(dept)">✏️</button>
+                        <button class="btn-icon danger" title="Eliminar" (click)="openDeleteDialog(dept)">🗑️</button>
                     </td>
                 </tr>
             </tbody>
         </table>
+
+        <div class="table-pager" *ngIf="departments().length > 0 && totalPages() > 1">
+            <span>Página {{ currentPage() }} de {{ totalPages() }}</span>
+            <div class="pager-actions">
+                <button class="btn-secondary" (click)="previousPage()" [disabled]="currentPage() === 1">Anterior</button>
+                <button class="btn-secondary" (click)="nextPage()" [disabled]="currentPage() === totalPages()">Siguiente</button>
+            </div>
+        </div>
 
         <!-- Empty State -->
         <div *ngIf="departments().length === 0" class="empty-state">
             <div class="empty-icon">📂</div>
             <h4>Sin Departamentos</h4>
             <p>No se han creado carpetas base en el Área Documental de esta unidad.</p>
-            <button class="btn-secondary" *ngIf="isGlobalAdmin">Crear primer departamento</button>
+            <button class="btn-secondary" *ngIf="isGlobalAdmin" (click)="openCreateDialog()">Crear primer departamento</button>
         </div>
     </div>
 </div>
+
+<div class="modal-backdrop" *ngIf="isCreateDialogOpen() || isRenameDialogOpen() || isDeleteDialogOpen()"></div>
+
+<section class="action-modal" *ngIf="isCreateDialogOpen()">
+    <header>
+        <h4>Nuevo departamento</h4>
+    </header>
+    <div class="modal-body">
+        <label>Nombre del departamento</label>
+        <input
+            type="text"
+            [value]="newDepartmentName()"
+            (input)="newDepartmentName.set($any($event.target).value)"
+            placeholder="Ej: ARCHIVO GENERAL" />
+        <p class="error-text" *ngIf="operationError()">{{ operationError() }}</p>
+    </div>
+    <footer>
+        <button class="btn-secondary" (click)="closeCreateDialog()" [disabled]="operationLoading()">Cancelar</button>
+        <button class="btn-primary" (click)="createDepartment()" [disabled]="operationLoading()">
+            {{ operationLoading() ? 'Creando...' : 'Crear' }}
+        </button>
+    </footer>
+</section>
+
+<section class="action-modal" *ngIf="isRenameDialogOpen()">
+    <header>
+        <h4>Renombrar departamento</h4>
+    </header>
+    <div class="modal-body">
+        <p>Actual: <strong>{{ renameTarget()?.name }}</strong></p>
+        <label>Nuevo nombre</label>
+        <input
+            type="text"
+            [value]="renameDepartmentName()"
+            (input)="renameDepartmentName.set($any($event.target).value)" />
+        <p class="error-text" *ngIf="operationError()">{{ operationError() }}</p>
+    </div>
+    <footer>
+        <button class="btn-secondary" (click)="closeRenameDialog()" [disabled]="operationLoading()">Cancelar</button>
+        <button class="btn-primary" (click)="renameDepartment()" [disabled]="operationLoading()">
+            {{ operationLoading() ? 'Guardando...' : 'Guardar' }}
+        </button>
+    </footer>
+</section>
+
+<section class="action-modal" *ngIf="isDeleteDialogOpen()">
+    <header>
+        <h4>Eliminar departamento</h4>
+    </header>
+    <div class="modal-body">
+        <p>Vas a eliminar <strong>{{ deleteTarget()?.name }}</strong>.</p>
+        <p>Para confirmar, escribe exactamente <strong>ELIMINAR</strong>:</p>
+        <input
+            type="text"
+            [value]="deleteConfirmationText()"
+            (input)="deleteConfirmationText.set($any($event.target).value)"
+            placeholder="ELIMINAR" />
+        <p class="error-text" *ngIf="operationError()">{{ operationError() }}</p>
+    </div>
+    <footer>
+        <button class="btn-secondary" (click)="closeDeleteDialog()" [disabled]="operationLoading()">Cancelar</button>
+        <button class="btn-danger" (click)="confirmDelete()" [disabled]="operationLoading() || !canConfirmDelete()">
+            {{ operationLoading() ? 'Eliminando...' : 'Eliminar' }}
+        </button>
+    </footer>
+</section>
 
 <!-- Permissions Drawer -->
 <app-department-permissions-drawer
     [isOpen]="isPermissionsDrawerOpen()"
     [nodeId]="selectedNodeId()"
     [nodeName]="selectedNodeName()"
+    [isGlobalAdmin]="isGlobalAdmin"
     (closeDrawer)="closePermissionsDrawer()"
     (permissionsUpdated)="onPermissionsUpdated()">
 </app-department-permissions-drawer>

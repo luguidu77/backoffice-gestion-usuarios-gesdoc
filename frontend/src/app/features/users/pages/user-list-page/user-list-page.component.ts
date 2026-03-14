@@ -1,7 +1,8 @@
-﻿import { Component, OnInit, computed, signal } from '@angular/core';
+﻿import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { Router } from '@angular/router';
 import { catchError, finalize, map, switchMap } from 'rxjs/operators';
 import { forkJoin, of } from 'rxjs';
 
@@ -37,10 +38,8 @@ interface UnitMenuView {
 
 interface GlobalUserRow {
   member: GroupMemberItem;
-  sites: string[];
-  adminSites: string[];
-  departments: string[];
-  departmentIds: string[];
+  email: string;
+  enabled: boolean;
 }
 
 interface UnitOption {
@@ -54,6 +53,7 @@ interface UnitDiff {
   final: string[];
   toAdd: string[];
   toRemove: string[];
+  transferFrom: string | null;
 }
 
 interface DepartmentDiff {
@@ -83,6 +83,15 @@ interface UnitReassignmentResult {
   proofStoredFileName: string;
 }
 
+interface UserUnitMembershipCard {
+  siteId: string;
+  siteName: string;
+  role: string;
+  isAdmin: boolean;
+  departments: string[];
+  technicalGroups: string[];
+}
+
 @Component({
   selector: 'app-user-list-page',
   standalone: true,
@@ -90,7 +99,7 @@ interface UnitReassignmentResult {
   templateUrl: './user-list-page.component.html',
   styleUrls: ['./user-list-page.component.scss']
 })
-export class UserListPageComponent implements OnInit {
+export class UserListPageComponent implements OnInit, OnDestroy {
   private readonly role = this.authService.getUserRole();
   private readonly managedSiteIdSet = new Set(
     this.authService.getManagedSiteIds().map(id => id.toUpperCase())
@@ -99,7 +108,7 @@ export class UserListPageComponent implements OnInit {
   readonly isGlobalAdmin = this.role === 'GLOBAL_ADMIN';
   readonly isUnitAdmin = this.role === 'UNIT_ADMIN';
 
-  viewMode = signal<'structure' | 'global'>('structure');
+  viewMode = signal<'structure' | 'global'>('global');
 
   rawGroups = signal<GroupItem[]>([]);
   unitNameById = signal<Record<string, string>>({});
@@ -128,6 +137,13 @@ export class UserListPageComponent implements OnInit {
   globalResults = signal<GlobalUserRow[]>([]);
   globalSearching = signal<boolean>(false);
   globalSearchError = signal<string>('');
+  globalPage = signal<number>(1);
+  globalTotalUsers = signal<number>(0);
+  globalHasMore = signal<boolean>(false);
+  readonly globalPageSize = 50;
+  pendingFocusUserId = signal<string>('');
+
+  private globalSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   actionMessage = signal<string>('');
   actionError = signal<string>('');
@@ -136,6 +152,12 @@ export class UserListPageComponent implements OnInit {
   actionMember = signal<GroupMemberItem | null>(null);
   actionContextUnitId = signal<string | null>(null);
   actionContextUnitName = signal<string>('');
+  actionUserFullName = signal<string>('');
+  actionUserEmail = signal<string>('');
+  actionUserRole = signal<string>('');
+  actionUserUnits = signal<UserUnitMembershipCard[]>([]);
+  actionDetailsLoading = signal<boolean>(false);
+  actionDetailsError = signal<string>('');
   promoteConfirmOpen = signal<boolean>(false);
   promoteSuccessOpen = signal<boolean>(false);
   promoteSuccessMessage = signal<string>('');
@@ -158,6 +180,7 @@ export class UserListPageComponent implements OnInit {
   originalUnitDepartmentIds = signal<string[]>([]);
   unitWizardStep = signal<1 | 2 | 3 | 4>(1);
   unitReassignMode = signal<UnitReassignmentMode>('TRANSFER');
+  unitTransferFromId = signal<string>('');
   unitTargetIds = signal<string[]>([]);
   selectedUnitDepartmentIds = signal<string[]>([]);
   unitDepartmentError = signal<string>('');
@@ -310,8 +333,13 @@ export class UserListPageComponent implements OnInit {
 
   selectableUnits = computed<UnitOption[]>(() => {
     const units = this.availableUnits();
+    if (this.unitReassignMode() === 'DEPARTMENTS') {
+      const originalSet = new Set(this.originalUnitIds());
+      return units.filter(unit => originalSet.has(unit.id));
+    }
     if (this.unitReassignMode() === 'TRANSFER') {
-      return units;
+      const originalSet = new Set(this.originalUnitIds());
+      return units.filter(unit => !originalSet.has(unit.id));
     }
 
     const originalSet = new Set(this.originalUnitIds());
@@ -321,10 +349,15 @@ export class UserListPageComponent implements OnInit {
   filteredAvailableUnits = computed(() => {
     let units = this.selectableUnits();
 
-    if (this.unitShowOnlySelected()) {
-      const selected = new Set(this.unitTargetIds());
-      units = units.filter(unit => selected.has(unit.id));
-    }
+    const originalUnits = new Set(this.originalUnitIds());
+    units = [...units].sort((a, b) => {
+      const aCurrent = originalUnits.has(a.id) ? 0 : 1;
+      const bCurrent = originalUnits.has(b.id) ? 0 : 1;
+      if (aCurrent !== bCurrent) {
+        return aCurrent - bCurrent;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
     const term = this.unitReassignSearch().trim().toLowerCase();
     if (!term) {
@@ -343,7 +376,7 @@ export class UserListPageComponent implements OnInit {
   departmentAssignmentUnitIds = computed<string[]>(() => {
     const diff = this.unitDiff();
     if (this.unitReassignMode() === 'TRANSFER') {
-      return diff.final;
+      return diff.target;
     }
     return diff.target;
   });
@@ -361,6 +394,7 @@ export class UserListPageComponent implements OnInit {
           .filter(department => department.unitId === unitId)
           .sort((a, b) => a.displayName.localeCompare(b.displayName))
       }))
+      .sort((a, b) => a.unitName.localeCompare(b.unitName))
       .filter(section => section.departments.length > 0);
   });
   unitDepartmentDiff = computed<DepartmentDiff>(() => this.computeDepartmentDiff());
@@ -373,8 +407,15 @@ export class UserListPageComponent implements OnInit {
     if (this.unitReassignLoading()) {
       return false;
     }
+    if (this.unitReassignMode() === 'DEPARTMENTS') {
+      return this.unitTargetIds().length > 0;
+    }
     if (this.unitReassignMode() === 'ADD') {
       return this.unitTargetIds().length > 0;
+    }
+    const originalCount = this.originalUnitIds().length;
+    if (originalCount > 1 && !this.unitTransferFromId()) {
+      return false;
     }
     return this.unitTargetIds().length === 1;
   });
@@ -401,17 +442,24 @@ export class UserListPageComponent implements OnInit {
       departmentDiff.toRemove.length > 0;
   });
 
+  globalTotalPages = computed<number>(() => {
+    const total = this.globalTotalUsers();
+    return Math.max(1, Math.ceil(total / this.globalPageSize));
+  });
+
   constructor(
     private groupService: GroupService,
     private userService: UserService,
     private siteService: SiteService,
     private authService: AuthService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private router: Router
   ) { }
 
   ngOnInit(): void {
     const preselectedUnitId = this.route.snapshot.queryParamMap.get('siteId');
     const preselectedUnitName = this.route.snapshot.queryParamMap.get('siteName');
+    const preselectedUserId = this.route.snapshot.queryParamMap.get('userId');
 
     if (preselectedUnitId || preselectedUnitName) {
       this.isUnitContextLocked.set(true);
@@ -427,18 +475,41 @@ export class UserListPageComponent implements OnInit {
 
     this.loadUnits();
     this.loadDepartments();
+    this.switchMode('global');
+
+    if (this.globalSearchTerm().trim().length === 0) {
+      this.globalPage.set(1);
+      this.searchGlobalUsersByScope('', 1);
+    }
+
+    if (preselectedUserId && preselectedUserId.trim().length > 0) {
+      const normalizedUserId = preselectedUserId.trim();
+      this.pendingFocusUserId.set(normalizedUserId);
+      this.globalSearchTerm.set(normalizedUserId);
+      this.searchGlobalUsersByScope(normalizedUserId);
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.globalSearchDebounceTimer) {
+      clearTimeout(this.globalSearchDebounceTimer);
+      this.globalSearchDebounceTimer = null;
+    }
   }
 
   switchMode(mode: 'structure' | 'global'): void {
+    if (mode === 'structure') {
+      return;
+    }
+
     this.viewMode.set(mode);
     this.actionError.set('');
     this.actionMessage.set('');
 
     if (mode === 'global') {
       const term = this.globalSearchTerm().trim();
-      if (term.length >= 3) {
-        this.searchGlobalUsersByScope(term);
-      }
+      this.globalPage.set(1);
+      this.searchGlobalUsersByScope(term, 1);
     }
   }
 
@@ -486,9 +557,7 @@ export class UserListPageComponent implements OnInit {
 
     if (this.viewMode() === 'global') {
       const term = this.globalSearchTerm().trim();
-      if (term.length >= 3) {
-        this.searchGlobalUsersByScope(term);
-      }
+      this.searchGlobalUsersByScope(term, this.globalPage());
     }
   }
 
@@ -651,20 +720,36 @@ export class UserListPageComponent implements OnInit {
 
     const term = value.trim();
     if (term.length === 0) {
-      this.globalResults.set([]);
       this.globalSearchError.set('');
-      this.globalSearching.set(false);
+      this.globalPage.set(1);
+      this.scheduleGlobalSearch('', 1);
       return;
     }
 
-    if (term.length < 3) {
-      this.globalResults.set([]);
-      this.globalSearchError.set('Introduce al menos 3 caracteres para buscar.');
-      this.globalSearching.set(false);
+    this.globalSearchError.set('');
+    this.globalPage.set(1);
+    this.scheduleGlobalSearch(term, 1);
+  }
+
+  goToPreviousGlobalPage(): void {
+    if (this.globalPage() <= 1 || this.globalSearching()) {
       return;
     }
+    const previousPage = this.globalPage() - 1;
+    this.globalPage.set(previousPage);
+    this.searchGlobalUsersByScope(this.globalSearchTerm().trim(), previousPage);
+  }
 
-    this.searchGlobalUsersByScope(term);
+  goToNextGlobalPage(): void {
+    if (this.globalSearching()) {
+      return;
+    }
+    const nextPage = this.globalPage() + 1;
+    if (nextPage > this.globalTotalPages()) {
+      return;
+    }
+    this.globalPage.set(nextPage);
+    this.searchGlobalUsersByScope(this.globalSearchTerm().trim(), nextPage);
   }
 
   openUserActionsDrawer(member: GroupMemberItem, unitId: string | null, unitName: string): void {
@@ -678,6 +763,7 @@ export class UserListPageComponent implements OnInit {
     this.actionMember.set(member);
     this.actionContextUnitId.set(unitId);
     this.actionContextUnitName.set(unitName || '');
+    this.loadActionUserDetails(member.id);
     this.isUserActionsOpen.set(true);
   }
 
@@ -686,15 +772,12 @@ export class UserListPageComponent implements OnInit {
     this.actionMember.set(null);
     this.actionContextUnitId.set(null);
     this.actionContextUnitName.set('');
-  }
-
-  openDepartmentReassignmentFromActions(): void {
-    const member = this.actionMember();
-    if (!member) {
-      return;
-    }
-    this.closeUserActionsDrawer();
-    this.openReassignDrawer(member);
+    this.actionUserFullName.set('');
+    this.actionUserEmail.set('');
+    this.actionUserRole.set('');
+    this.actionUserUnits.set([]);
+    this.actionDetailsLoading.set(false);
+    this.actionDetailsError.set('');
   }
 
   openUnitReassignmentFromActions(): void {
@@ -706,21 +789,10 @@ export class UserListPageComponent implements OnInit {
     this.openUnitReassignDrawer(member);
   }
 
-  canPromoteFromUserActions(): boolean {
-    return this.isGlobalAdmin && !!this.actionContextUnitId();
-  }
 
-  requestPromoteFromUserActions(): void {
-    if (!this.isGlobalAdmin) {
-      return;
-    }
-
-    if (!this.actionContextUnitId()) {
-      this.actionError.set('Selecciona una unidad en Gestion por estructura para asignar Administrador de Unidad.');
-      return;
-    }
-
-    this.promoteConfirmOpen.set(true);
+  goToUnitDetailFromAction(siteId: string, siteName: string): void {
+    this.closeUserActionsDrawer();
+    this.router.navigate(['/unidades', siteId], { queryParams: { siteName, tab: 'departamentos' } });
   }
 
   closePromoteConfirmDialog(): void {
@@ -758,9 +830,7 @@ export class UserListPageComponent implements OnInit {
           this.refreshMemberManagedSitesForUser(member.id);
           if (this.viewMode() === 'global') {
             const term = this.globalSearchTerm().trim();
-            if (term.length >= 3) {
-              this.searchGlobalUsersByScope(term);
-            }
+            this.searchGlobalUsersByScope(term, this.globalPage());
           }
         },
         error: (err) => {
@@ -805,6 +875,7 @@ export class UserListPageComponent implements OnInit {
     this.isUnitReassignOpen.set(true);
     this.unitWizardStep.set(1);
     this.unitReassignMode.set('TRANSFER');
+    this.unitTransferFromId.set('');
     this.unitReassignSearch.set('');
     this.unitReassignError.set('');
     this.unitDepartmentError.set('');
@@ -824,6 +895,7 @@ export class UserListPageComponent implements OnInit {
     this.selectedMember.set(null);
     this.unitWizardStep.set(1);
     this.unitReassignMode.set('TRANSFER');
+    this.unitTransferFromId.set('');
     this.unitReassignSearch.set('');
     this.unitReassignError.set('');
     this.unitDepartmentError.set('');
@@ -873,8 +945,10 @@ export class UserListPageComponent implements OnInit {
 
         this.originalUnitIds.set(scopedMemberships);
         if (this.unitReassignMode() === 'TRANSFER') {
-          this.unitTargetIds.set(scopedMemberships.length === 1 ? [scopedMemberships[0]] : []);
+          this.unitTransferFromId.set(scopedMemberships.length > 0 ? scopedMemberships[0] : '');
+          this.unitTargetIds.set([]);
         } else {
+          this.unitTransferFromId.set(scopedMemberships.length > 0 ? scopedMemberships[0] : '');
           this.unitTargetIds.set([...scopedMemberships]);
         }
         this.syncSelectedDepartmentsForCurrentTargets();
@@ -942,6 +1016,15 @@ export class UserListPageComponent implements OnInit {
     this.syncSelectedDepartmentsForCurrentTargets();
   }
 
+  setTransferFromUnit(unitId: string): void {
+    this.unitTransferFromId.set(unitId);
+    if (this.unitReassignMode() === 'TRANSFER' && this.unitTargetIds().includes(unitId)) {
+      this.unitTargetIds.set([]);
+    }
+    this.syncSelectedDepartmentsForCurrentTargets();
+    this.unitDepartmentError.set('');
+  }
+
   isUnitDepartmentSelected(departmentId: string): boolean {
     return this.selectedUnitDepartmentIds().includes(departmentId);
   }
@@ -968,12 +1051,24 @@ export class UserListPageComponent implements OnInit {
     this.unitDepartmentError.set('');
 
     if (mode === 'TRANSFER') {
-      this.unitTargetIds.set(previousFinal.length > 0 ? [previousFinal[0]] : []);
+      const original = this.normalizeUnitIds(this.originalUnitIds());
+      this.unitTransferFromId.set(original.length > 0 ? original[0] : '');
+      this.unitTargetIds.set([]);
+      this.syncSelectedDepartmentsForCurrentTargets();
+      return;
+    }
+
+    if (mode === 'DEPARTMENTS') {
+      const original = this.normalizeUnitIds(this.originalUnitIds());
+      this.unitTransferFromId.set(original.length > 0 ? original[0] : '');
+      this.unitTargetIds.set([...original]);
       this.syncSelectedDepartmentsForCurrentTargets();
       return;
     }
 
     const originalSet = new Set(this.originalUnitIds());
+    const original = this.normalizeUnitIds(this.originalUnitIds());
+    this.unitTransferFromId.set(original.length > 0 ? original[0] : '');
     this.unitTargetIds.set(previousFinal.filter(unitId => !originalSet.has(unitId)));
     this.syncSelectedDepartmentsForCurrentTargets();
   }
@@ -1069,7 +1164,13 @@ export class UserListPageComponent implements OnInit {
   }
 
   getUnitModeLabel(mode: UnitReassignmentMode): string {
-    return mode === 'TRANSFER' ? 'Traslado de unidad' : 'Alta en unidad adicional';
+    if (mode === 'TRANSFER') {
+      return 'Traslado de unidad';
+    }
+    if (mode === 'DEPARTMENTS') {
+      return 'Reasignacion de departamentos';
+    }
+    return 'Alta en unidad adicional';
   }
 
   saveReassignment(): void {
@@ -1109,9 +1210,7 @@ export class UserListPageComponent implements OnInit {
             this.loadMembersForSelectedGroup();
           } else {
             const term = this.globalSearchTerm().trim();
-            if (term.length >= 3) {
-              this.searchGlobalUsersByScope(term);
-            }
+            this.searchGlobalUsersByScope(term, this.globalPage());
           }
         },
         error: (err) => {
@@ -1180,7 +1279,8 @@ export class UserListPageComponent implements OnInit {
             operationMode: this.unitReassignMode(),
             fromUnitIds: unitDiff.original,
             targetUnitIds: unitDiff.target,
-            finalUnitIds: unitDiff.final
+            finalUnitIds: unitDiff.final,
+            transferFromUnitId: unitDiff.transferFrom || undefined
           });
         }),
         finalize(() => this.unitReassignSaving.set(false))
@@ -1212,9 +1312,7 @@ export class UserListPageComponent implements OnInit {
             this.loadMembersForSelectedGroup();
           } else {
             const term = this.globalSearchTerm().trim();
-            if (term.length >= 3) {
-              this.searchGlobalUsersByScope(term);
-            }
+            this.searchGlobalUsersByScope(term, this.globalPage());
           }
         },
         error: (err) => {
@@ -1236,7 +1334,10 @@ export class UserListPageComponent implements OnInit {
 
   unitModeDescription(mode: UnitReassignmentMode): string {
     if (mode === 'TRANSFER') {
-      return 'El usuario quedara solo en las unidades destino seleccionadas.';
+      return 'Traslada al usuario desde una unidad origen hacia una unidad destino.';
+    }
+    if (mode === 'DEPARTMENTS') {
+      return 'Mantiene sus unidades y solo se actualizan departamentos en las unidades elegidas.';
     }
     return 'El usuario mantiene sus unidades actuales y se agrega a nuevas.';
   }
@@ -1282,10 +1383,7 @@ export class UserListPageComponent implements OnInit {
   }
 
   getPrimaryUnitIdForGlobalRow(row: GlobalUserRow): string | null {
-    const firstDepartment = row.departmentIds
-      .map(departmentId => this.departments().find(dep => dep.id === departmentId))
-      .find(dep => !!dep && !!dep.unitId);
-    return firstDepartment?.unitId || null;
+    return null;
   }
 
   getPrimaryUnitNameForGlobalRow(row: GlobalUserRow): string {
@@ -1376,14 +1474,30 @@ export class UserListPageComponent implements OnInit {
 
     let target = rawTarget;
     let final = rawTarget;
+    let transferFrom: string | null = null;
 
-    if (this.unitReassignMode() === 'ADD') {
+    if (this.unitReassignMode() === 'DEPARTMENTS') {
+      const originalSet = new Set(original);
+      target = rawTarget.filter(unitId => originalSet.has(unitId));
+      final = original;
+    } else if (this.unitReassignMode() === 'ADD') {
       const originalSet = new Set(original);
       target = rawTarget.filter(unitId => !originalSet.has(unitId));
       final = this.normalizeUnitIds(original.concat(target));
     } else {
       target = rawTarget.length > 0 ? [rawTarget[0]] : [];
-      final = target;
+      const selectedFrom = (this.unitTransferFromId() || '').trim();
+      transferFrom = original.includes(selectedFrom)
+        ? selectedFrom
+        : (original.length === 1 ? original[0] : null);
+
+      if (target.length === 0) {
+        final = original;
+      } else if (transferFrom) {
+        final = this.normalizeUnitIds(original.filter(unitId => unitId !== transferFrom).concat(target));
+      } else {
+        final = target;
+      }
     }
 
     const toAdd = final.filter(unitId => !original.includes(unitId));
@@ -1394,7 +1508,8 @@ export class UserListPageComponent implements OnInit {
       target,
       final,
       toAdd,
-      toRemove
+      toRemove,
+      transferFrom
     };
   }
 
@@ -1451,6 +1566,10 @@ export class UserListPageComponent implements OnInit {
 
     if (this.unitReassignMode() === 'TRANSFER') {
       return 'Selecciona al menos un departamento en la unidad destino.';
+    }
+
+    if (this.unitReassignMode() === 'DEPARTMENTS') {
+      return 'Selecciona al menos un departamento en cada unidad elegida: ' + missingUnits.join(', ') + '.';
     }
 
     return 'Selecciona al menos un departamento en cada unidad destino: ' + missingUnits.join(', ') + '.';
@@ -1521,18 +1640,48 @@ export class UserListPageComponent implements OnInit {
     }
   }
 
-  private searchGlobalUsersByScope(term: string): void {
+  private scheduleGlobalSearch(term: string, page: number): void {
+    if (this.globalSearchDebounceTimer) {
+      clearTimeout(this.globalSearchDebounceTimer);
+      this.globalSearchDebounceTimer = null;
+    }
+
+    this.globalSearchDebounceTimer = setTimeout(() => {
+      this.searchGlobalUsersByScope(term, page);
+    }, 250);
+  }
+
+  private searchGlobalUsersByScope(term: string, page: number = 1): void {
     this.globalSearching.set(true);
     this.globalSearchError.set('');
 
     if (this.isGlobalAdmin) {
-      this.userService.getUsers(200, 0, undefined, term).subscribe({
+      const currentPage = Math.max(1, page);
+      const skipCount = (currentPage - 1) * this.globalPageSize;
+      this.userService.getUsers(this.globalPageSize, skipCount, undefined, term || undefined).subscribe({
         next: (response: UserListResponse) => {
-          this.buildGlobalRows(response.users || []);
+          const rows = this.mapUsersToGlobalRows(response.users || []);
+          this.globalResults.set(rows);
+          this.globalTotalUsers.set(response.totalUsers || rows.length);
+          this.globalHasMore.set(!!response.hasMore);
+          this.globalPage.set(currentPage);
+          this.globalSearching.set(false);
+
+          const pendingUserId = this.pendingFocusUserId();
+          if (pendingUserId) {
+            const pendingRow = rows.find(row => row.member.id.toUpperCase() === pendingUserId.toUpperCase());
+            if (pendingRow) {
+              this.pendingFocusUserId.set('');
+              this.openUserActionsDrawer(pendingRow.member, null, '');
+              this.clearTransientQueryParams();
+            }
+          }
         },
         error: (err) => {
           console.error('Error en busqueda global:', err);
           this.globalResults.set([]);
+          this.globalTotalUsers.set(0);
+          this.globalHasMore.set(false);
           this.globalSearchError.set('No se pudo completar la busqueda global de usuarios.');
           this.globalSearching.set(false);
         }
@@ -1544,6 +1693,8 @@ export class UserListPageComponent implements OnInit {
       const targetSiteIds = this.authService.getManagedSiteIds();
       if (targetSiteIds.length === 0) {
         this.globalResults.set([]);
+        this.globalTotalUsers.set(0);
+        this.globalHasMore.set(false);
         this.globalSearchError.set('No hay sitios disponibles para buscar usuarios.');
         this.globalSearching.set(false);
         return;
@@ -1562,11 +1713,18 @@ export class UserListPageComponent implements OnInit {
           }
 
           const filteredUsers = Array.from(mergedById.values()).filter(user => this.userMatchesTerm(user, term));
-          this.buildGlobalRows(filteredUsers);
+          const rows = this.mapUsersToGlobalRows(filteredUsers);
+          this.globalResults.set(rows);
+          this.globalTotalUsers.set(rows.length);
+          this.globalHasMore.set(false);
+          this.globalPage.set(1);
+          this.globalSearching.set(false);
         },
         error: (err) => {
           console.error('Error en busqueda por sitios:', err);
           this.globalResults.set([]);
+          this.globalTotalUsers.set(0);
+          this.globalHasMore.set(false);
           this.globalSearchError.set('No se pudo completar la busqueda de usuarios en los sitios gestionados.');
           this.globalSearching.set(false);
         }
@@ -1575,60 +1733,24 @@ export class UserListPageComponent implements OnInit {
     }
 
     this.globalResults.set([]);
+    this.globalTotalUsers.set(0);
+    this.globalHasMore.set(false);
     this.globalSearchError.set('Tu usuario no tiene permisos para buscar usuarios.');
     this.globalSearching.set(false);
   }
 
-  private buildGlobalRows(users: User[]): void {
-    const maxUsers = 40;
-    const limitedUsers = users.slice(0, maxUsers);
-
-    if (limitedUsers.length === 0) {
-      this.globalResults.set([]);
-      this.globalSearching.set(false);
-      return;
-    }
-
-    const detailRequests = limitedUsers.map(user =>
-      forkJoin({
-        groups: this.userService.getUserGroups(user.id),
-        sites: this.userService.getUserSites(user.id)
-      })
-    );
-
-    forkJoin(detailRequests).subscribe({
-      next: (details: Array<{ groups: UserGroupListResponse; sites: UserSiteMembershipListResponse }>) => {
-        const rows: GlobalUserRow[] = limitedUsers.map((user, index) => {
-          const groupEntries: Group[] = details[index].groups?.groups || [];
-          const siteEntries: UserSiteMembership[] = details[index].sites?.sites || [];
-
-          const departmentInfo = this.getUserDepartmentInfo(groupEntries);
-          const siteLabels = this.getUserSiteLabels(siteEntries);
-          const adminSiteLabels = this.getUserAdminSiteLabels(siteEntries);
-
-          return {
-            member: {
-              id: user.id,
-              displayName: this.getUserFullName(user),
-              memberType: 'PERSON'
-            },
-            sites: siteLabels,
-            adminSites: adminSiteLabels,
-            departments: departmentInfo.labels,
-            departmentIds: departmentInfo.ids
-          };
-        });
-
-        this.globalResults.set(rows);
-        this.globalSearching.set(false);
-      },
-      error: (err) => {
-        console.error('Error cargando detalle de usuarios globales:', err);
-        this.globalResults.set([]);
-        this.globalSearchError.set('No se pudieron cargar los sitios/departamentos de los usuarios encontrados.');
-        this.globalSearching.set(false);
-      }
-    });
+  private mapUsersToGlobalRows(users: User[]): GlobalUserRow[] {
+    return [...(users || [])]
+      .sort((left, right) => (left.id || '').localeCompare(right.id || ''))
+      .map(user => ({
+        member: {
+          id: user.id,
+          displayName: this.getUserFullName(user),
+          memberType: 'PERSON'
+        },
+        email: user.email || '—',
+        enabled: !!user.enabled
+      }));
   }
 
   private getUserDepartmentInfo(groups: Group[]): { labels: string[]; ids: string[] } {
@@ -1641,15 +1763,12 @@ export class UserListPageComponent implements OnInit {
         continue;
       }
 
-      const technicalName = this.toTechnicalName(group.id);
-      const unitId = this.extractUnitId(technicalName);
-      if (!unitId) {
+      const parsed = this.parseActionGroupForDisplay(group.id);
+      if (!parsed || parsed.type !== 'department') {
         continue;
       }
 
-      const departmentName = this.formatDepartmentName(technicalName);
-      const unitName = this.resolveUnitName(unitId);
-      const label = departmentName + ' (' + unitName + ')';
+      const label = parsed.label + ' (' + this.resolveUnitName(parsed.unitId) + ')';
 
       if (!seenLabels.has(label)) {
         seenLabels.add(label);
@@ -1715,7 +1834,7 @@ export class UserListPageComponent implements OnInit {
     return {
       id: group.id,
       technicalName: technicalName,
-      displayName: this.formatDepartmentName(technicalName),
+      displayName: this.formatDepartmentName(technicalName, unitId),
       unitId: unitId,
       unitName: this.resolveUnitName(unitId)
     };
@@ -1741,11 +1860,42 @@ export class UserListPageComponent implements OnInit {
   }
 
   private extractUnitId(technicalName: string): string | null {
-    const match = technicalName.match(/^(E\d{4,})_/i);
-    return match ? match[1].toUpperCase() : null;
+    const normalized = (technicalName || '').trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const upperTechnicalName = normalized.toUpperCase();
+    const knownUnitIds = Object.keys(this.unitNameById())
+      .sort((a, b) => b.length - a.length);
+
+    for (const knownUnitId of knownUnitIds) {
+      const upperUnitId = knownUnitId.toUpperCase();
+      if (
+        upperTechnicalName === upperUnitId ||
+        upperTechnicalName.startsWith(upperUnitId + '_') ||
+        upperTechnicalName.includes('_' + upperUnitId + '_') ||
+        upperTechnicalName.endsWith('_' + upperUnitId) ||
+        upperTechnicalName.startsWith('SITE_' + upperUnitId + '_')
+      ) {
+        return knownUnitId;
+      }
+    }
+
+    const siteMatch = upperTechnicalName.match(/^SITE_([^_]+)_/i);
+    if (siteMatch?.[1]) {
+      return siteMatch[1];
+    }
+
+    const legacyMatch = upperTechnicalName.match(/^(E\d{4,})_/i);
+    if (legacyMatch?.[1]) {
+      return legacyMatch[1].toUpperCase();
+    }
+
+    return null;
   }
 
-  private formatDepartmentName(technicalName: string): string {
+  private formatDepartmentName(technicalName: string, unitId?: string | null): string {
     if (!technicalName) {
       return '';
     }
@@ -1758,10 +1908,22 @@ export class UserListPageComponent implements OnInit {
       return technicalName;
     }
 
-    const hasUnitPrefix = /^E\d{4,}$/i.test(tokens[0]);
-    const rawTokens = hasUnitPrefix ? tokens.slice(1) : tokens;
-    const withoutCategory = rawTokens.filter(token => token.toLowerCase() !== 'negociados');
-    const finalTokens = withoutCategory.length > 0 ? withoutCategory : rawTokens;
+    const upperUnitId = (unitId || '').toUpperCase();
+    const rawTokens = [...tokens];
+
+    if (rawTokens[0]?.toUpperCase() === 'SITE') {
+      rawTokens.shift();
+    }
+
+    if (upperUnitId && rawTokens[0]?.toUpperCase() === upperUnitId) {
+      rawTokens.shift();
+    }
+
+    const hasLegacyUnitPrefix = rawTokens[0] && /^E\d{4,}$/i.test(rawTokens[0]);
+    const normalizedTokens = hasLegacyUnitPrefix ? rawTokens.slice(1) : rawTokens;
+
+    const withoutCategory = normalizedTokens.filter(token => token.toLowerCase() !== 'negociados');
+    const finalTokens = withoutCategory.length > 0 ? withoutCategory : normalizedTokens;
 
     if (finalTokens.length === 0) {
       return technicalName.replace(/_/g, ' ');
@@ -1931,6 +2093,208 @@ export class UserListPageComponent implements OnInit {
 
   private isSiteManagerRole(role: string | null | undefined): boolean {
     return (role || '').trim().toLowerCase() === 'sitemanager';
+  }
+
+  private clearTransientQueryParams(): void {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {},
+      replaceUrl: true
+    });
+  }
+
+  private loadActionUserDetails(userId: string): void {
+    this.actionDetailsLoading.set(true);
+    this.actionDetailsError.set('');
+
+    forkJoin({
+      users: this.userService.getUsers(20, 0, undefined, userId).pipe(
+        catchError(() => of({ users: [], totalUsers: 0, hasMore: false } as UserListResponse))
+      ),
+      groups: this.userService.getUserGroups(userId).pipe(
+        catchError(() => of({ groups: [], totalItems: 0 } as UserGroupListResponse))
+      ),
+      sites: this.userService.getUserSites(userId).pipe(
+        catchError(() => of({ sites: [], totalItems: 0 } as UserSiteMembershipListResponse))
+      )
+    }).subscribe({
+      next: ({ users, groups, sites }) => {
+        const exactUser = (users.users || []).find(user => user.id.toUpperCase() === userId.toUpperCase()) || users.users?.[0];
+        const fullName = exactUser ? this.getUserFullName(exactUser) : this.getMemberName({ id: userId, displayName: userId, memberType: 'PERSON' });
+        const email = exactUser?.email || '—';
+
+        const departmentsByUnit = new Map<string, string[]>();
+        const technicalGroupsByUnit = new Map<string, string[]>();
+        for (const group of groups.groups || []) {
+          const parsed = this.parseActionGroupForDisplay(group.id);
+          if (!parsed) {
+            continue;
+          }
+
+          const targetMap = parsed.type === 'technical' ? technicalGroupsByUnit : departmentsByUnit;
+          const current = targetMap.get(parsed.unitId) || [];
+          if (!current.includes(parsed.label)) {
+            current.push(parsed.label);
+          }
+          targetMap.set(parsed.unitId, current);
+        }
+
+        const cards: UserUnitMembershipCard[] = [];
+        const seen = new Set<string>();
+        for (const site of sites.sites || []) {
+          if (seen.has(site.siteId)) {
+            continue;
+          }
+          seen.add(site.siteId);
+          cards.push({
+            siteId: site.siteId,
+            siteName: this.resolveUnitName(site.siteId),
+            role: this.formatUserSiteRole(site.role),
+            isAdmin: this.isSiteManagerRole(site.role),
+            departments: (departmentsByUnit.get(site.siteId) || []).sort((a, b) => a.localeCompare(b)),
+            technicalGroups: (technicalGroupsByUnit.get(site.siteId) || []).sort((a, b) => a.localeCompare(b))
+          });
+        }
+
+        const unitsFromGroups = new Set<string>([
+          ...departmentsByUnit.keys(),
+          ...technicalGroupsByUnit.keys()
+        ]);
+
+        for (const unitId of unitsFromGroups.values()) {
+          if (seen.has(unitId)) {
+            continue;
+          }
+
+          cards.push({
+            siteId: unitId,
+            siteName: this.resolveUnitName(unitId),
+            role: 'Miembro',
+            isAdmin: false,
+            departments: [...(departmentsByUnit.get(unitId) || [])].sort((a, b) => a.localeCompare(b)),
+            technicalGroups: [...(technicalGroupsByUnit.get(unitId) || [])].sort((a, b) => a.localeCompare(b))
+          });
+        }
+
+        cards.sort((a, b) => a.siteName.localeCompare(b.siteName));
+        const hasAnyAdmin = cards.some(card => card.isAdmin);
+
+        this.actionUserFullName.set(fullName || userId);
+        this.actionUserEmail.set(email);
+        this.actionUserRole.set(hasAnyAdmin ? 'Administrador de sitio en alguna unidad' : 'Usuario de sitio');
+        this.actionUserUnits.set(cards);
+        this.actionDetailsLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Error cargando detalle de usuario para ficha:', err);
+        this.actionDetailsError.set('No se pudo cargar la ficha de usuario.');
+        this.actionDetailsLoading.set(false);
+      }
+    });
+  }
+
+  private formatUserSiteRole(role: string | null | undefined): string {
+    const normalized = (role || '').trim().toLowerCase();
+    if (normalized === 'sitemanager') {
+      return 'Administrador de sitio';
+    }
+    if (normalized === 'sitecollaborator') {
+      return 'Colaborador';
+    }
+    if (normalized === 'sitecontributor') {
+      return 'Contribuidor';
+    }
+    if (normalized === 'siteconsumer') {
+      return 'Lector';
+    }
+    return role || 'Miembro';
+  }
+
+  private parseActionGroupForDisplay(groupId: string): { unitId: string; label: string; type: 'department' | 'technical' } | null {
+    const technicalName = this.toTechnicalName(groupId);
+    const unitId = this.extractUnitId(technicalName);
+    if (!unitId) {
+      return null;
+    }
+
+    const suffix = this.extractGroupSuffixForUnit(technicalName, unitId);
+    if (!suffix) {
+      return null;
+    }
+
+    const normalizedSuffix = suffix.replace(/_/g, '').toUpperCase();
+    if (normalizedSuffix === unitId.replace(/_/g, '').toUpperCase()) {
+      return null;
+    }
+
+    const normalizedRole = this.normalizeSiteRoleGroupLabel(suffix);
+    if (normalizedRole) {
+      return { unitId, label: normalizedRole, type: 'technical' };
+    }
+
+    const departmentLabel = this.formatDepartmentName(technicalName, unitId).trim();
+    if (!departmentLabel) {
+      return null;
+    }
+
+    const normalizedFromDepartment = this.normalizeSiteRoleGroupLabel(departmentLabel);
+    if (normalizedFromDepartment) {
+      return { unitId, label: normalizedFromDepartment, type: 'technical' };
+    }
+
+    return { unitId, label: departmentLabel, type: 'department' };
+  }
+
+  private extractGroupSuffixForUnit(technicalName: string, unitId: string): string {
+    const upper = (technicalName || '').toUpperCase();
+    const upperUnitId = (unitId || '').toUpperCase();
+
+    const sitePrefix = 'SITE_' + upperUnitId + '_';
+    if (upper.startsWith(sitePrefix)) {
+      return technicalName.substring(sitePrefix.length);
+    }
+
+    const plainPrefix = upperUnitId + '_';
+    if (upper.startsWith(plainPrefix)) {
+      return technicalName.substring(plainPrefix.length);
+    }
+
+    if (upper === upperUnitId) {
+      return '';
+    }
+
+    const tokens = technicalName.split('_').filter(token => token && token.trim().length > 0);
+    if (tokens.length === 0) {
+      return '';
+    }
+
+    let index = 0;
+    if ((tokens[0] || '').toUpperCase() === 'SITE') {
+      index = 1;
+    }
+
+    if ((tokens[index] || '').toUpperCase() === upperUnitId) {
+      index++;
+    }
+
+    return tokens.slice(index).join('_');
+  }
+
+  private normalizeSiteRoleGroupLabel(value: string): string | null {
+    const normalized = (value || '').replace(/_/g, '').trim().toUpperCase();
+    if (normalized === 'SITECONSUMER') {
+      return 'Lector de sitio';
+    }
+    if (normalized === 'SITECOLLABORATOR') {
+      return 'Colaborador de sitio';
+    }
+    if (normalized === 'SITECONTRIBUTOR') {
+      return 'Contribuidor de sitio';
+    }
+    if (normalized === 'SITEMANAGER') {
+      return 'Administrador de sitio';
+    }
+    return null;
   }
 
   private resolvePreferredUnitFromNavigation(): UnitMenuView | null {
