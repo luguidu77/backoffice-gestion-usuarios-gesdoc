@@ -414,6 +414,19 @@ table {
   }
 }
 
+.action-card-danger {
+  border-color: #dc2626;
+  background: #fef2f2;
+
+  strong {
+    color: #b91c1c;
+  }
+
+  span {
+    color: #7f1d1d;
+  }
+}
+
 .btn-primary,
 .btn-secondary,
 .btn-refresh {
@@ -816,6 +829,16 @@ button:disabled {
     font-size: 0.84rem;
     color: #374151;
   }
+}
+
+.summary-card.status-card-active {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.summary-card.status-card-inactive {
+  border-color: #fca5a5;
+  background: #fef2f2;
 }
 
 .result-card {

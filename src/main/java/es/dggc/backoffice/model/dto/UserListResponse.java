@@ -55,16 +55,22 @@ public class UserListResponse {
         private String lastName;
         private String email;
         private Boolean enabled;
+        private String role;
 
         public UserDto() {
         }
 
         public UserDto(String id, String firstName, String lastName, String email, Boolean enabled) {
+            this(id, firstName, lastName, email, enabled, null);
+        }
+
+        public UserDto(String id, String firstName, String lastName, String email, Boolean enabled, String role) {
             this.id = id;
             this.firstName = firstName;
             this.lastName = lastName;
             this.email = email;
             this.enabled = enabled;
+            this.role = role;
         }
 
         public String getId() {
@@ -105,6 +111,14 @@ public class UserListResponse {
 
         public void setEnabled(Boolean enabled) {
             this.enabled = enabled;
+        }
+
+        public String getRole() {
+            return role;
+        }
+
+        public void setRole(String role) {
+            this.role = role;
         }
 
         public String getFullName() {

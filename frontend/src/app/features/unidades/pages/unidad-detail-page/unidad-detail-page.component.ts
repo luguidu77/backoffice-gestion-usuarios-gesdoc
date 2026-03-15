@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { SiteService } from '../../../../core/services/site.service';
 import { AuthService } from '../../../../core/services/auth.service';
@@ -15,10 +16,13 @@ interface UserUnitMembershipCard {
   departments: string[];
 }
 
+type MemberStatusFilter = 'all' | 'active' | 'inactive';
+type MemberRoleFilter = 'all' | 'manager' | 'contributor' | 'consumer' | 'generic';
+
 @Component({
   selector: 'app-unidad-detail-page',
   standalone: true,
-  imports: [CommonModule, DepartmentListComponent],
+  imports: [CommonModule, FormsModule, DepartmentListComponent],
   templateUrl: './unidad-detail-page.component.html',
   styleUrl: './unidad-detail-page.component.scss'
 })
@@ -37,15 +41,48 @@ export class UnidadDetailPageComponent implements OnInit {
   loadingMembers = signal<boolean>(false);
   membersError = signal<string>('');
   membersCurrentPage = signal<number>(1);
+  membersSearchTerm = signal<string>('');
+  membersStatusFilter = signal<MemberStatusFilter>('all');
+  membersRoleFilter = signal<MemberRoleFilter>('all');
+
+  filteredMembers = computed<User[]>(() => {
+    const normalizedTerm = this.normalizeMemberSearch(this.membersSearchTerm());
+    const statusFilter = this.membersStatusFilter();
+    const roleFilter = this.membersRoleFilter();
+
+    return this.members().filter(member => {
+      if (statusFilter === 'active' && !member.enabled) {
+        return false;
+      }
+
+      if (statusFilter === 'inactive' && member.enabled) {
+        return false;
+      }
+
+      if (roleFilter !== 'all' && this.getMemberRoleKey(member) !== roleFilter) {
+        return false;
+      }
+
+      if (normalizedTerm && !this.matchesMemberSearch(member, normalizedTerm)) {
+        return false;
+      }
+
+      return true;
+    });
+  });
+
+  unitAdminMembers = computed<User[]>(() => {
+    return this.members().filter(member => this.getMemberRoleKey(member) === 'manager');
+  });
 
   membersTotalPages = computed<number>(() => {
-    const total = this.members().length;
+    const total = this.filteredMembers().length;
     return Math.max(1, Math.ceil(total / this.membersUiPageSize));
   });
 
   paginatedMembers = computed<User[]>(() => {
     const start = (this.membersCurrentPage() - 1) * this.membersUiPageSize;
-    return this.members().slice(start, start + this.membersUiPageSize);
+    return this.filteredMembers().slice(start, start + this.membersUiPageSize);
   });
 
   isUserDrawerOpen = signal<boolean>(false);
@@ -85,6 +122,8 @@ export class UnidadDetailPageComponent implements OnInit {
 
     const user = this.authService.getUserData();
     this.isGlobalAdmin.set(user?.isGlobalAdmin === true);
+
+    this.ensureMembersLoaded();
   }
 
   setTab(tab: 'resumen' | 'departamentos' | 'miembros' | 'ajustes') {
@@ -151,6 +190,64 @@ export class UnidadDetailPageComponent implements OnInit {
     if (this.membersCurrentPage() < this.membersTotalPages()) {
       this.membersCurrentPage.set(this.membersCurrentPage() + 1);
     }
+  }
+
+  onMembersSearchChange(value: string): void {
+    this.membersSearchTerm.set(value || '');
+    this.membersCurrentPage.set(1);
+  }
+
+  onMembersStatusFilterChange(value: string): void {
+    const normalized = (value || '').toLowerCase();
+    if (normalized === 'active' || normalized === 'inactive') {
+      this.membersStatusFilter.set(normalized);
+    } else {
+      this.membersStatusFilter.set('all');
+    }
+    this.membersCurrentPage.set(1);
+  }
+
+  onMembersRoleFilterChange(value: string): void {
+    const normalized = (value || '').toLowerCase();
+    if (normalized === 'manager' || normalized === 'contributor' || normalized === 'consumer' || normalized === 'generic') {
+      this.membersRoleFilter.set(normalized);
+    } else {
+      this.membersRoleFilter.set('all');
+    }
+    this.membersCurrentPage.set(1);
+  }
+
+  clearMembersFilters(): void {
+    this.membersSearchTerm.set('');
+    this.membersStatusFilter.set('all');
+    this.membersRoleFilter.set('all');
+    this.membersCurrentPage.set(1);
+  }
+
+  focusMembersTab(): void {
+    this.ensureMembersLoaded();
+    this.setTab('miembros');
+  }
+
+  getMemberRoleLabel(member: User): string {
+    const key = this.getMemberRoleKey(member);
+    if (key === 'manager') {
+      return 'Administrador de Unidad';
+    }
+    if (key === 'contributor') {
+      return 'Colaborador';
+    }
+    if (key === 'consumer') {
+      return 'Lector';
+    }
+    return 'Miembro Genérico';
+  }
+
+  getMemberDisplayName(member: User): string {
+    const firstName = (member.firstName || '').trim();
+    const lastName = (member.lastName || '').trim();
+    const fullName = (firstName + ' ' + lastName).trim();
+    return fullName || member.id;
   }
 
   openUserDetailsDrawer(member: User): void {
@@ -468,5 +565,44 @@ export class UnidadDetailPageComponent implements OnInit {
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^A-Za-z0-9]/g, '')
       .toUpperCase();
+  }
+
+  private ensureMembersLoaded(): void {
+    if (this.loadingMembers() || this.members().length > 0) {
+      return;
+    }
+    this.loadMembers();
+  }
+
+  private getMemberRoleKey(member: User): MemberRoleFilter {
+    const role = (member.role || '').trim().toUpperCase();
+    if (role === 'SITEMANAGER') {
+      return 'manager';
+    }
+    if (role === 'SITECONTRIBUTOR' || role === 'SITECOLLABORATOR') {
+      return 'contributor';
+    }
+    if (role === 'SITECONSUMER') {
+      return 'consumer';
+    }
+    return 'generic';
+  }
+
+  private matchesMemberSearch(member: User, normalizedTerm: string): boolean {
+    const id = this.normalizeMemberSearch(member.id || '');
+    const email = this.normalizeMemberSearch(member.email || '');
+    const fullName = this.normalizeMemberSearch(this.getMemberDisplayName(member));
+
+    return id.includes(normalizedTerm)
+      || email.includes(normalizedTerm)
+      || fullName.includes(normalizedTerm);
+  }
+
+  private normalizeMemberSearch(value: string): string {
+    return (value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
   }
 }

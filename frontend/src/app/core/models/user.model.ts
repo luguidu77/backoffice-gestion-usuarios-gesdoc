@@ -4,6 +4,7 @@ export interface User {
   lastName: string;
   email: string;
   enabled: boolean;
+  role?: string;
   avatarId?: string;
   // Campos derivados
   memberOfUnits?: string[];
@@ -40,7 +41,7 @@ export interface UserSiteMembershipListResponse {
   totalItems: number;
 }
 
-export type UnitReassignmentMode = 'TRANSFER' | 'ADD' | 'DEPARTMENTS';
+export type UnitReassignmentMode = 'TRANSFER' | 'ADD' | 'DEPARTMENTS' | 'STATUS';
 
 export interface UnitReassignmentProofPayload {
   file: File;
@@ -78,6 +79,26 @@ export interface UnitReassignmentAuditItem {
 
 export interface UnitReassignmentAuditListResponse {
   items: UnitReassignmentAuditItem[];
+  totalItems: number;
+  hasMore: boolean;
+  skipCount: number;
+  maxItems: number;
+}
+
+export interface UserOriginAuditItem {
+  userId: string;
+  fullName: string;
+  email: string;
+  enabled: boolean;
+  createdAt: string;
+  createdBy: string;
+  source: string;
+  lastActivityAt: string;
+  reassignmentCount: number;
+}
+
+export interface UserOriginAuditListResponse {
+  items: UserOriginAuditItem[];
   totalItems: number;
   hasMore: boolean;
   skipCount: number;

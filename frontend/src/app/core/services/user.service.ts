@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import {
   User,
   UserListResponse,
@@ -8,7 +9,8 @@ import {
   UserSiteMembershipListResponse,
   UnitReassignmentProofPayload,
   UnitReassignmentProofResponse,
-  UnitReassignmentAuditListResponse
+  UnitReassignmentAuditListResponse,
+  UserOriginAuditListResponse
 } from '../models/user.model';
 
 export interface UnitReassignmentAuditQuery {
@@ -18,6 +20,11 @@ export interface UnitReassignmentAuditQuery {
   toDate?: string;
   sort?: 'newest' | 'oldest' | 'user-asc' | 'user-desc';
   includeMetadata?: boolean;
+}
+
+export interface UserOriginAuditQuery {
+  searchTerm?: string;
+  status?: 'all' | 'active' | 'inactive';
 }
 import { environment } from '../../../environments/environment';
 
@@ -89,6 +96,19 @@ export class UserService {
     return this.http.get<UserSiteMembershipListResponse>(`${this.apiUrl}/${userId}/sites`);
   }
 
+  updateUserEnabled(userId: string, enabled: boolean): Observable<User> {
+    const encodedUserId = encodeURIComponent(userId);
+    const endpoint = `${this.apiUrl}/${encodedUserId}/enabled`;
+    return this.http.put<User>(endpoint, { enabled }).pipe(
+      catchError((error) => {
+        if (error?.status === 405) {
+          return this.http.post<User>(endpoint, { enabled });
+        }
+        return throwError(() => error);
+      })
+    );
+  }
+
   /**
    * Sube un PDF justificante asociado a una reasignacion de unidad.
    */
@@ -157,5 +177,25 @@ export class UserService {
     return this.http.get(`${this.apiUrl}/unit-reassignment-audits/${encodedNodeId}/content`, {
       responseType: 'blob'
     });
+  }
+
+  getUserOriginAudits(
+    query?: UserOriginAuditQuery,
+    maxItems: number = 20,
+    skipCount: number = 0
+  ): Observable<UserOriginAuditListResponse> {
+    let params = new HttpParams()
+      .set('maxItems', maxItems.toString())
+      .set('skipCount', skipCount.toString());
+
+    if (query?.searchTerm && query.searchTerm.trim().length > 0) {
+      params = params.set('searchTerm', query.searchTerm.trim());
+    }
+
+    if (query?.status && query.status.trim().length > 0) {
+      params = params.set('status', query.status);
+    }
+
+    return this.http.get<UserOriginAuditListResponse>(`${this.apiUrl}/user-origin-audits`, { params });
   }
 }

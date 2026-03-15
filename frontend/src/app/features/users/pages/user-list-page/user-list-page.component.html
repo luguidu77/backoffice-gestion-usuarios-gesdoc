@@ -295,6 +295,14 @@
             <h4>Rol</h4>
             <p>{{ actionUserRole() || '—' }}</p>
           </article>
+          <article class="summary-card" [class.status-card-active]="actionUserEnabled()" [class.status-card-inactive]="!actionUserEnabled()">
+            <h4>Estado</h4>
+            <p>
+              <span class="status-badge" [class.active]="actionUserEnabled()" [class.inactive]="!actionUserEnabled()">
+                {{ actionUserEnabled() ? 'Activo' : 'Inactivo' }}
+              </span>
+            </p>
+          </article>
         </div>
 
         <section class="membership-section">
@@ -329,7 +337,7 @@
         <div class="action-card-list single-action">
           <button class="action-card action-card-highlight" (click)="openUnitReassignmentFromActions()">
             <strong>Gestionar usuario (asistente)</strong>
-            <span>Un único asistente para reasignar unidades, departamentos y roles por unidad.</span>
+            <span>Un único asistente para activar/desactivar usuario, reasignar unidades, departamentos y roles por unidad.</span>
           </button>
         </div>
       </ng-container>
@@ -357,7 +365,7 @@
         <button
           type="button"
           [class.active]="unitWizardStep() === 2"
-          [disabled]="unitReassignLoading()"
+          [disabled]="unitReassignLoading() || !unitReassignMode()"
           (click)="goToUnitWizardStep(2)">
           2. Unidad de destino
         </button>
@@ -388,8 +396,16 @@
             <button
               type="button"
               class="mode-card"
+              [class.active]="unitReassignMode() === 'STATUS'"
+              (click)="onUnitModeCardClick('STATUS')">
+              <span class="mode-title">Activar / Desactivar usuario</span>
+              <span class="mode-desc">{{ unitModeDescription('STATUS') }}</span>
+            </button>
+            <button
+              type="button"
+              class="mode-card"
               [class.active]="unitReassignMode() === 'TRANSFER'"
-              (click)="selectUnitReassignMode('TRANSFER')">
+              (click)="onUnitModeCardClick('TRANSFER')">
               <span class="mode-title">Trasladar de unidad</span>
               <span class="mode-desc">{{ unitModeDescription('TRANSFER') }}</span>
             </button>
@@ -397,7 +413,7 @@
               type="button"
               class="mode-card"
               [class.active]="unitReassignMode() === 'ADD'"
-              (click)="selectUnitReassignMode('ADD')">
+              (click)="onUnitModeCardClick('ADD')">
               <span class="mode-title">Agregar unidad adicional</span>
               <span class="mode-desc">{{ unitModeDescription('ADD') }}</span>
             </button>
@@ -405,7 +421,7 @@
               type="button"
               class="mode-card"
               [class.active]="unitReassignMode() === 'DEPARTMENTS'"
-              (click)="selectUnitReassignMode('DEPARTMENTS')">
+              (click)="onUnitModeCardClick('DEPARTMENTS')">
               <span class="mode-title">Reasignacion de departamentos</span>
               <span class="mode-desc">{{ unitModeDescription('DEPARTMENTS') }}</span>
             </button>
@@ -413,7 +429,34 @@
         </section>
 
         <section class="wizard-step" *ngSwitchCase="2">
-          <div class="wizard-summary-grid">
+          <div class="summary-card result-card" *ngIf="unitReassignMode() === 'STATUS'">
+            <h4>Estado de acceso del usuario</h4>
+            <p class="drawer-context" *ngIf="unitStatusLoading()">Cargando estado actual del usuario...</p>
+            <p><strong>Estado actual:</strong> {{ unitCurrentEnabled() ? 'Activo' : 'Inactivo' }}</p>
+
+            <div class="group-checklist">
+              <label>
+                <input
+                  type="radio"
+                  name="wizard-user-status"
+                  [checked]="unitTargetEnabled()"
+                  [disabled]="unitStatusLoading() || unitReassignSaving()"
+                  (change)="unitTargetEnabled.set(true)" />
+                <span>Activo</span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="wizard-user-status"
+                  [checked]="!unitTargetEnabled()"
+                  [disabled]="unitStatusLoading() || unitReassignSaving()"
+                  (change)="unitTargetEnabled.set(false)" />
+                <span>Inactivo</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="wizard-summary-grid" *ngIf="unitReassignMode() !== 'STATUS'">
             <article class="summary-card">
               <h4>Unidades actuales</h4>
               <div class="chips" *ngIf="currentUnitOptions().length > 0; else noCurrentUnits">
@@ -439,7 +482,7 @@
             </article>
           </div>
 
-          <div class="search-box compact">
+          <div class="search-box compact" *ngIf="unitReassignMode() !== 'STATUS'">
             <input
               type="text"
               [ngModel]="unitReassignSearch()"
@@ -469,7 +512,7 @@
             Debes seleccionar la unidad origen del traslado.
           </div>
 
-          <div class="group-checklist" *ngIf="filteredAvailableUnits().length > 0">
+          <div class="group-checklist" *ngIf="unitReassignMode() !== 'STATUS' && filteredAvailableUnits().length > 0">
             <label *ngFor="let unit of filteredAvailableUnits(); trackBy: trackByUnitOption">
               <input
                 [attr.type]="unitReassignMode() === 'TRANSFER' ? 'radio' : 'checkbox'"
@@ -480,13 +523,13 @@
             </label>
           </div>
 
-          <div class="empty" *ngIf="filteredAvailableUnits().length === 0">
+          <div class="empty" *ngIf="unitReassignMode() !== 'STATUS' && filteredAvailableUnits().length === 0">
             No hay unidades disponibles con ese filtro.
           </div>
         </section>
 
         <section class="wizard-step" *ngSwitchCase="3">
-          <div class="summary-card">
+          <div class="summary-card" *ngIf="unitReassignMode() !== 'STATUS'; else statusNoStep3">
             <h4>Unidad(es) destino seleccionada(s)</h4>
             <div class="chips" *ngIf="selectedTargetUnitOptions().length > 0; else noTargetUnitsForDepartments">
               <span class="chip" *ngFor="let unit of selectedTargetUnitOptions(); trackBy: trackByUnitOption">{{ unit.name }}</span>
@@ -527,28 +570,40 @@
               {{ unitDepartmentSelectionMessage() }}
             </div>
           </div>
+
+          <ng-template #statusNoStep3>
+            <div class="summary-card">
+              <h4>Este paso no aplica</h4>
+              <p class="drawer-context">El cambio de estado no requiere selección de departamentos.</p>
+            </div>
+          </ng-template>
         </section>
 
         <section class="wizard-step" *ngSwitchCase="4">
-          <p class="drawer-context">
+          <p class="drawer-context" *ngIf="unitReassignMode() !== 'STATUS'">
             Revisa el resultado y adjunta el PDF justificante para completar la reasignacion.
+          </p>
+          <p class="drawer-context" *ngIf="unitReassignMode() === 'STATUS'">
+            Confirma el nuevo estado de acceso del usuario.
           </p>
 
           <div class="summary-card result-card">
             <h4>Resumen del cambio</h4>
             <p><strong>Modo:</strong> {{ getUnitModeLabel(unitReassignMode()) }}</p>
-            <p><strong>Unidades anadidas:</strong> {{ addedUnitOptions().length }}</p>
-            <p><strong>Unidades retiradas:</strong> {{ removedUnitOptions().length }}</p>
+            <p *ngIf="unitReassignMode() === 'STATUS'"><strong>Estado actual:</strong> {{ unitCurrentEnabled() ? 'Activo' : 'Inactivo' }}</p>
+            <p *ngIf="unitReassignMode() === 'STATUS'"><strong>Nuevo estado:</strong> {{ unitTargetEnabled() ? 'Activo' : 'Inactivo' }}</p>
+            <p *ngIf="unitReassignMode() !== 'STATUS'"><strong>Unidades anadidas:</strong> {{ addedUnitOptions().length }}</p>
+            <p *ngIf="unitReassignMode() !== 'STATUS'"><strong>Unidades retiradas:</strong> {{ removedUnitOptions().length }}</p>
 
-            <div class="chips" *ngIf="addedUnitOptions().length > 0">
+            <div class="chips" *ngIf="unitReassignMode() !== 'STATUS' && addedUnitOptions().length > 0">
               <span class="chip" *ngFor="let unit of addedUnitOptions(); trackBy: trackByUnitOption">+ {{ unit.name }}</span>
             </div>
-            <div class="chips" *ngIf="removedUnitOptions().length > 0">
+            <div class="chips" *ngIf="unitReassignMode() !== 'STATUS' && removedUnitOptions().length > 0">
               <span class="chip" *ngFor="let unit of removedUnitOptions(); trackBy: trackByUnitOption">- {{ unit.name }}</span>
             </div>
           </div>
 
-          <div class="proof-upload">
+          <div class="proof-upload" *ngIf="unitReassignMode() !== 'STATUS'">
             <label for="unit-proof-file">Justificante PDF *</label>
             <input
               id="unit-proof-file"
@@ -577,7 +632,7 @@
       </button>
       <button
         class="btn-primary"
-        *ngIf="unitWizardStep() < 4"
+        *ngIf="unitWizardStep() < 4 && unitWizardStep() !== 1"
         (click)="nextUnitWizardStep()"
         [disabled]="(unitWizardStep() === 2 && !canProceedFromUnitStep2()) || (unitWizardStep() === 3 && !canProceedFromUnitStep3()) || unitReassignLoading() || unitReassignSaving()">
         Siguiente

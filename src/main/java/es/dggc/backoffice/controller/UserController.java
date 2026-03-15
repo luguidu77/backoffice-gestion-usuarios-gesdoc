@@ -16,6 +16,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * Controlador REST para operaciones de gestión de usuarios.
@@ -110,7 +111,6 @@ public class UserController {
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable String userId) {
         log.info("Solicitud de información de usuario: {}", userId);
-
         // Validar header de autorización
         if (authHeader == null || !authHeader.startsWith("Basic ")) {
             log.warn("Solicitud sin header de autorización válido");
@@ -179,6 +179,58 @@ public class UserController {
 
         UserSiteMembershipListResponse response = alfrescoUserService.getUserSites(token, userId);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Activa o desactiva un usuario de Alfresco.
+     *
+     * PUT /api/users/{userId}/enabled
+     * Body: { "enabled": true|false }
+     */
+    @PutMapping("/{userId}/enabled")
+    public ResponseEntity<?> updateUserEnabledPut(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId,
+            @RequestBody Map<String, Object> body) {
+        return updateUserEnabledInternal(authHeader, userId, body);
+    }
+
+    @PostMapping("/{userId}/enabled")
+    public ResponseEntity<?> updateUserEnabledPost(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId,
+            @RequestBody Map<String, Object> body) {
+        return updateUserEnabledInternal(authHeader, userId, body);
+    }
+
+    private ResponseEntity<?> updateUserEnabledInternal(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @PathVariable String userId,
+            @RequestBody Map<String, Object> body) {
+        log.info("Solicitud de actualizacion de estado para usuario {}", userId);
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Collections.singletonMap("message", "No autorizado"));
+        }
+
+        Object enabledValue = body != null ? body.get("enabled") : null;
+        if (!(enabledValue instanceof Boolean)) {
+            return ResponseEntity.badRequest()
+                    .body(Collections.singletonMap("message", "El campo 'enabled' es obligatorio y debe ser booleano."));
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            boolean enabled = (Boolean) enabledValue;
+            UserListResponse.UserDto updated = alfrescoUserService.updateUserEnabled(token, userId, enabled);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            log.error("Error actualizando estado del usuario {}: {}", userId, e.getMessage(), e);
+            Map<String, Object> response = new LinkedHashMap<String, Object>();
+            response.put("message", "No se pudo actualizar el estado del usuario.");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
     /**
@@ -291,6 +343,39 @@ public class UserController {
         } catch (Exception e) {
             log.error("Error descargando auditoria {}: {}", nodeId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Endpoint para consulta de fecha/creador de usuarios (con fallback a auditoría).
+     *
+     * GET /api/users/user-origin-audits
+     */
+    @GetMapping("/user-origin-audits")
+    public ResponseEntity<Map<String, Object>> listUserOriginAudits(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestParam(value = "searchTerm", required = false) String searchTerm,
+            @RequestParam(value = "status", required = false, defaultValue = "all") String status,
+            @RequestParam(value = "maxItems", required = false, defaultValue = "20") Integer maxItems,
+            @RequestParam(value = "skipCount", required = false, defaultValue = "0") Integer skipCount) {
+
+        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Collections.<String, Object>emptyMap());
+        }
+
+        try {
+            String token = authHeader.substring(6);
+            Map<String, Object> response = alfrescoUserService.listUserOriginAudits(
+                    token,
+                    searchTerm,
+                    status,
+                    maxItems,
+                    skipCount);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error consultando auditoría de fecha/creador: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Collections.<String, Object>singletonMap("message", "No se pudo consultar la auditoría de fecha/creador."));
         }
     }
 }

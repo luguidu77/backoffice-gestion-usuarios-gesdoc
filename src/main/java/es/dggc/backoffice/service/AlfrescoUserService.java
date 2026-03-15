@@ -29,6 +29,7 @@ import org.springframework.core.io.ByteArrayResource;
 
 import java.io.IOException;
 import java.text.Normalizer;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
@@ -56,6 +57,12 @@ public class AlfrescoUserService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final DateTimeFormatter PROOF_TS_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS");
     private static final String AUDIT_ROOT_FOLDER = "Backoffice-Reasignaciones-Auditoria";
+
+    private static class UserActivitySummary {
+        private String firstActivityAt;
+        private String lastActivityAt;
+        private int reassignmentCount;
+    }
 
     private final RestTemplate restTemplate;
     private final AlfrescoProperties alfrescoProperties;
@@ -211,7 +218,8 @@ public class AlfrescoUserService {
                                         person.getFirstName(),
                                         person.getLastName(),
                                         person.getEmail(),
-                                        person.getEnabled());
+                                        person.getEnabled(),
+                                        wrapper.getEntry().getRole());
                             })
                             .collect(Collectors.toList());
                 }
@@ -287,6 +295,43 @@ public class AlfrescoUserService {
         } catch (Exception e) {
             log.error("Error al buscar usuarios con término {}: {}", term, e.getMessage());
             return new UserListResponse(new ArrayList<>(), 0, false);
+        }
+    }
+
+    public UserDto updateUserEnabled(String basicAuthToken, String userId, boolean enabled) {
+        try {
+            String encodedUserId = URLEncoder.encode(userId.trim(), "UTF-8");
+            String url = alfrescoProperties.getBaseUrl()
+                    + "/api/-default-/public/alfresco/versions/1/people/"
+                    + encodedUserId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> payload = new LinkedHashMap<String, Object>();
+            payload.put("enabled", enabled);
+
+            ResponseEntity<AlfrescoPersonResponse> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    new HttpEntity<Map<String, Object>>(payload, headers),
+                    AlfrescoPersonResponse.class);
+
+            AlfrescoPersonResponse body = response.getBody();
+            if (body == null || body.getEntry() == null) {
+                return new UserDto(userId, "", "", "", enabled);
+            }
+
+            AlfrescoPersonResponse.PersonEntry person = body.getEntry();
+            return new UserDto(
+                    person.getId(),
+                    person.getFirstName(),
+                    person.getLastName(),
+                    person.getEmail(),
+                    person.getEnabled());
+        } catch (Exception e) {
+            throw new RuntimeException("No se pudo actualizar el estado del usuario " + userId + ".", e);
         }
     }
 
@@ -538,6 +583,14 @@ public class AlfrescoUserService {
         int effectiveMaxItems = (maxItems != null && maxItems > 0) ? maxItems : 100;
         int effectiveSkipCount = (skipCount != null && skipCount >= 0) ? skipCount : 0;
 
+        boolean hasFilter = (userIdFilter != null && !userIdFilter.trim().isEmpty())
+            || (fromDate != null && !fromDate.trim().isEmpty())
+            || (toDate != null && !toDate.trim().isEmpty());
+
+        if (!hasFilter) {
+            return buildAuditListResponse(new ArrayList<Map<String, Object>>(), effectiveMaxItems, effectiveSkipCount);
+        }
+
         List<Map<String, Object>> collected = new ArrayList<Map<String, Object>>();
         String normalizedModeFilter = modeFilter != null ? modeFilter.trim().toUpperCase() : "";
         LocalDate parsedFromDate = parseDateOrNull(fromDate);
@@ -624,6 +677,262 @@ public class AlfrescoUserService {
             log.error("Error listando auditorias de reasignaciones: {}", e.getMessage(), e);
             return buildAuditListResponse(collected, effectiveMaxItems, effectiveSkipCount);
         }
+    }
+
+    public Map<String, Object> listUserOriginAudits(
+            String basicAuthToken,
+            String searchTerm,
+            String status,
+            Integer maxItems,
+            Integer skipCount) {
+
+        int effectiveMaxItems = (maxItems != null && maxItems > 0) ? maxItems : 20;
+        int effectiveSkipCount = (skipCount != null && skipCount >= 0) ? skipCount : 0;
+        String normalizedTerm = normalizeSearchableText(searchTerm);
+
+        if (normalizedTerm.isEmpty()) {
+            return buildAuditListResponse(new ArrayList<Map<String, Object>>(), effectiveMaxItems, effectiveSkipCount);
+        }
+
+        try {
+            List<UserDto> allUsers = loadAllUsers(basicAuthToken);
+            String normalizedStatus = status != null ? status.trim().toLowerCase() : "all";
+
+            List<UserDto> filtered = allUsers.stream()
+                    .filter(user -> matchesUserOriginFilters(user, normalizedTerm, normalizedStatus))
+                    .sorted(Comparator.comparing(UserDto::getId, Comparator.nullsLast(String::compareToIgnoreCase)))
+                    .collect(Collectors.toList());
+
+            int total = filtered.size();
+            int fromIndex = Math.min(effectiveSkipCount, total);
+            int toIndex = Math.min(fromIndex + effectiveMaxItems, total);
+            List<UserDto> pagedUsers = filtered.subList(fromIndex, toIndex);
+
+            Map<String, UserActivitySummary> activityByUser = buildUserActivitySummary(basicAuthToken);
+            List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+
+            for (UserDto user : pagedUsers) {
+                Map<String, String> directInfo = loadUserOriginDirectInfo(basicAuthToken, user.getId());
+                UserActivitySummary summary = activityByUser.get(user.getId() != null ? user.getId().toUpperCase() : "");
+
+                String createdAt = firstNonEmpty(
+                        directInfo.get("createdAt"),
+                        summary != null ? summary.firstActivityAt : null);
+
+                String createdBy = firstNonEmpty(
+                        directInfo.get("createdBy"),
+                        summary != null && summary.firstActivityAt != null ? "Auditoría de reasignaciones" : null,
+                        "No disponible");
+
+                String source = directInfo.get("createdAt") != null
+                        ? "ALFRESCO_PERSON"
+                        : (summary != null && summary.firstActivityAt != null ? "AUDITORIA_REASIGNACIONES" : "NO_DISPONIBLE");
+
+                Map<String, Object> entry = new LinkedHashMap<String, Object>();
+                entry.put("userId", user.getId());
+                entry.put("fullName", user.getFullName());
+                entry.put("email", user.getEmail());
+                entry.put("enabled", user.getEnabled());
+                entry.put("createdAt", createdAt != null ? createdAt : "");
+                entry.put("createdBy", createdBy);
+                entry.put("source", source);
+                entry.put("lastActivityAt", summary != null && summary.lastActivityAt != null ? summary.lastActivityAt : "");
+                entry.put("reassignmentCount", summary != null ? summary.reassignmentCount : 0);
+                items.add(entry);
+            }
+
+            Map<String, Object> response = new LinkedHashMap<String, Object>();
+            response.put("items", items);
+            response.put("totalItems", total);
+            response.put("hasMore", toIndex < total);
+            response.put("skipCount", effectiveSkipCount);
+            response.put("maxItems", effectiveMaxItems);
+            return response;
+        } catch (Exception e) {
+            log.error("Error listando auditoria de fecha/creador de usuario: {}", e.getMessage(), e);
+            return buildAuditListResponse(new ArrayList<Map<String, Object>>(), effectiveMaxItems, effectiveSkipCount);
+        }
+    }
+
+    private List<UserDto> loadAllUsers(String basicAuthToken) {
+        List<UserDto> allUsers = new ArrayList<UserDto>();
+        int skip = 0;
+        int pageSize = 500;
+
+        while (true) {
+            UserListResponse page = listUsers(basicAuthToken, pageSize, skip);
+            List<UserDto> users = page.getUsers() != null ? page.getUsers() : Collections.<UserDto>emptyList();
+            if (users.isEmpty()) {
+                break;
+            }
+
+            allUsers.addAll(users);
+            skip += users.size();
+
+            if (!Boolean.TRUE.equals(page.getHasMore())) {
+                break;
+            }
+        }
+
+        return allUsers;
+    }
+
+    private boolean matchesUserOriginFilters(UserDto user, String normalizedTerm, String normalizedStatus) {
+        if (user == null) {
+            return false;
+        }
+
+        if ("active".equals(normalizedStatus) && !Boolean.TRUE.equals(user.getEnabled())) {
+            return false;
+        }
+        if ("inactive".equals(normalizedStatus) && Boolean.TRUE.equals(user.getEnabled())) {
+            return false;
+        }
+
+        if (normalizedTerm == null || normalizedTerm.isEmpty()) {
+            return true;
+        }
+
+        String byId = normalizeSearchableText(user.getId());
+        String byEmail = normalizeSearchableText(user.getEmail());
+        String byName = normalizeSearchableText(user.getFullName());
+
+        return byId.contains(normalizedTerm)
+                || byEmail.contains(normalizedTerm)
+                || byName.contains(normalizedTerm);
+    }
+
+    private Map<String, String> loadUserOriginDirectInfo(String basicAuthToken, String userId) {
+        Map<String, String> data = new LinkedHashMap<String, String>();
+        if (userId == null || userId.trim().isEmpty()) {
+            return data;
+        }
+
+        try {
+            String encodedUserId = URLEncoder.encode(userId.trim(), "UTF-8");
+            String url = alfrescoProperties.getBaseUrl()
+                    + "/api/-default-/public/alfresco/versions/1/people/"
+                    + encodedUserId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + basicAuthToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<Void>(headers),
+                    Map.class);
+
+            Map body = response.getBody();
+            if (body == null) {
+                return data;
+            }
+
+            Object entryObject = body.get("entry");
+            if (!(entryObject instanceof Map)) {
+                return data;
+            }
+
+            Map entry = (Map) entryObject;
+            String createdAt = firstNonEmpty(
+                    asString(entry.get("createdAt")),
+                    asString(entry.get("createdOn")),
+                    asString(entry.get("created")));
+            String createdBy = firstNonEmpty(
+                    asString(entry.get("createdByUser")),
+                    asString(entry.get("createdBy")),
+                    asString(entry.get("creator")));
+
+            if (createdAt != null && !createdAt.isEmpty()) {
+                data.put("createdAt", createdAt);
+            }
+            if (createdBy != null && !createdBy.isEmpty()) {
+                data.put("createdBy", createdBy);
+            }
+        } catch (Exception ex) {
+            // Sin bloqueo: se usará fallback de auditoría si existe.
+        }
+
+        return data;
+    }
+
+    private Map<String, UserActivitySummary> buildUserActivitySummary(String basicAuthToken) {
+        Map<String, UserActivitySummary> byUser = new LinkedHashMap<String, UserActivitySummary>();
+
+        try {
+            Map<String, Object> auditsResponse = listUnitReassignmentAudits(
+                    basicAuthToken,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "newest",
+                    true,
+                    100000,
+                    0);
+
+            Object itemsObj = auditsResponse.get("items");
+            if (!(itemsObj instanceof List)) {
+                return byUser;
+            }
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> items = (List<Map<String, Object>>) itemsObj;
+            for (Map<String, Object> item : items) {
+                if (item == null) {
+                    continue;
+                }
+
+                String userId = asString(item.get("userId"));
+                String createdAt = asString(item.get("createdAt"));
+                if (userId == null || userId.trim().isEmpty()) {
+                    continue;
+                }
+
+                String key = userId.trim().toUpperCase();
+                UserActivitySummary summary = byUser.get(key);
+                if (summary == null) {
+                    summary = new UserActivitySummary();
+                    byUser.put(key, summary);
+                }
+
+                summary.reassignmentCount++;
+
+                if (createdAt != null && !createdAt.trim().isEmpty()) {
+                    if (summary.firstActivityAt == null || createdAt.compareTo(summary.firstActivityAt) < 0) {
+                        summary.firstActivityAt = createdAt;
+                    }
+                    if (summary.lastActivityAt == null || createdAt.compareTo(summary.lastActivityAt) > 0) {
+                        summary.lastActivityAt = createdAt;
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("No se pudo construir resumen de actividad de usuarios desde auditoría: {}", ex.getMessage());
+        }
+
+        return byUser;
+    }
+
+    private String asString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private String firstNonEmpty(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private Map<String, Object> loadAuditMetadataNode(String basicAuthToken, String nodeId) {

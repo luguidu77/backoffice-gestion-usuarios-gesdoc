@@ -155,6 +155,8 @@ export class UserListPageComponent implements OnInit, OnDestroy {
   actionUserFullName = signal<string>('');
   actionUserEmail = signal<string>('');
   actionUserRole = signal<string>('');
+  actionUserEnabled = signal<boolean>(true);
+  actionStatusSaving = signal<boolean>(false);
   actionUserUnits = signal<UserUnitMembershipCard[]>([]);
   actionDetailsLoading = signal<boolean>(false);
   actionDetailsError = signal<string>('');
@@ -179,7 +181,10 @@ export class UserListPageComponent implements OnInit, OnDestroy {
   originalUnitIds = signal<string[]>([]);
   originalUnitDepartmentIds = signal<string[]>([]);
   unitWizardStep = signal<1 | 2 | 3 | 4>(1);
-  unitReassignMode = signal<UnitReassignmentMode>('TRANSFER');
+  unitReassignMode = signal<UnitReassignmentMode | null>(null);
+  unitStatusLoading = signal<boolean>(false);
+  unitCurrentEnabled = signal<boolean>(true);
+  unitTargetEnabled = signal<boolean>(true);
   unitTransferFromId = signal<string>('');
   unitTargetIds = signal<string[]>([]);
   selectedUnitDepartmentIds = signal<string[]>([]);
@@ -333,6 +338,9 @@ export class UserListPageComponent implements OnInit, OnDestroy {
 
   selectableUnits = computed<UnitOption[]>(() => {
     const units = this.availableUnits();
+    if (!this.unitReassignMode()) {
+      return [];
+    }
     if (this.unitReassignMode() === 'DEPARTMENTS') {
       const originalSet = new Set(this.originalUnitIds());
       return units.filter(unit => originalSet.has(unit.id));
@@ -407,6 +415,15 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     if (this.unitReassignLoading()) {
       return false;
     }
+    if (!this.unitReassignMode()) {
+      return false;
+    }
+    if (this.unitReassignMode() === 'STATUS') {
+      if (this.unitStatusLoading()) {
+        return false;
+      }
+      return this.unitCurrentEnabled() !== this.unitTargetEnabled();
+    }
     if (this.unitReassignMode() === 'DEPARTMENTS') {
       return this.unitTargetIds().length > 0;
     }
@@ -424,12 +441,27 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     if (this.unitReassignLoading()) {
       return false;
     }
+    if (!this.unitReassignMode()) {
+      return false;
+    }
+    if (this.unitReassignMode() === 'STATUS') {
+      return true;
+    }
     return this.canProceedFromUnitStep2() && !this.unitDepartmentSelectionMessage();
   });
 
   canSaveUnitWizard = computed<boolean>(() => {
     if (this.unitReassignLoading() || this.unitReassignSaving()) {
       return false;
+    }
+    if (!this.unitReassignMode()) {
+      return false;
+    }
+    if (this.unitReassignMode() === 'STATUS') {
+      if (this.unitStatusLoading()) {
+        return false;
+      }
+      return this.unitCurrentEnabled() !== this.unitTargetEnabled();
     }
     if (!this.unitProofFile() || !!this.unitProofError()) {
       return false;
@@ -775,6 +807,8 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     this.actionUserFullName.set('');
     this.actionUserEmail.set('');
     this.actionUserRole.set('');
+    this.actionUserEnabled.set(true);
+    this.actionStatusSaving.set(false);
     this.actionUserUnits.set([]);
     this.actionDetailsLoading.set(false);
     this.actionDetailsError.set('');
@@ -785,8 +819,53 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     if (!member) {
       return;
     }
+    const currentEnabled = this.actionUserEnabled();
     this.closeUserActionsDrawer();
-    this.openUnitReassignDrawer(member);
+    this.openUnitReassignDrawer(member, currentEnabled);
+  }
+
+  toggleActionUserEnabled(): void {
+    const member = this.actionMember();
+    if (!member || this.actionStatusSaving()) {
+      return;
+    }
+
+    const currentStatus = this.actionUserEnabled();
+    const targetStatus = !currentStatus;
+    const verb = targetStatus ? 'activar' : 'desactivar';
+    const confirmed = window.confirm('¿Seguro que deseas ' + verb + ' al usuario ' + member.id + '?');
+    if (!confirmed) {
+      return;
+    }
+
+    this.actionStatusSaving.set(true);
+    this.actionError.set('');
+    this.actionMessage.set('');
+
+    this.userService.updateUserEnabled(member.id, targetStatus)
+      .pipe(finalize(() => this.actionStatusSaving.set(false)))
+      .subscribe({
+        next: (updatedUser) => {
+          const updatedEnabled = !!updatedUser?.enabled;
+          this.actionUserEnabled.set(updatedEnabled);
+          this.actionMessage.set('Usuario ' + member.id + ' ' + (updatedEnabled ? 'activado' : 'desactivado') + ' correctamente.');
+
+          if (this.viewMode() === 'global') {
+            const currentRows = this.globalResults();
+            const updatedRows = currentRows.map(row => row.member.id === member.id
+              ? { ...row, enabled: updatedEnabled }
+              : row);
+            this.globalResults.set(updatedRows);
+
+            const term = this.globalSearchTerm().trim();
+            this.searchGlobalUsersByScope(term, this.globalPage());
+          }
+        },
+        error: (err) => {
+          console.error('Error actualizando estado del usuario:', err);
+          this.actionError.set('No se pudo actualizar el estado del usuario.');
+        }
+      });
   }
 
 
@@ -865,7 +944,7 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     this.selectedMembershipIds.set([]);
   }
 
-  openUnitReassignDrawer(member: GroupMemberItem): void {
+  openUnitReassignDrawer(member: GroupMemberItem, currentEnabled?: boolean): void {
     this.closeUserActionsDrawer();
     this.closePromoteConfirmDialog();
     this.closePromoteSuccessDialog();
@@ -874,7 +953,13 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     this.selectedMember.set(member);
     this.isUnitReassignOpen.set(true);
     this.unitWizardStep.set(1);
-    this.unitReassignMode.set('TRANSFER');
+    this.unitReassignMode.set(null);
+    this.unitStatusLoading.set(false);
+    const initialEnabled = typeof currentEnabled === 'boolean'
+      ? currentEnabled
+      : this.actionUserEnabled();
+    this.unitCurrentEnabled.set(initialEnabled);
+    this.unitTargetEnabled.set(initialEnabled);
     this.unitTransferFromId.set('');
     this.unitReassignSearch.set('');
     this.unitReassignError.set('');
@@ -894,7 +979,10 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     this.isUnitReassignOpen.set(false);
     this.selectedMember.set(null);
     this.unitWizardStep.set(1);
-    this.unitReassignMode.set('TRANSFER');
+    this.unitReassignMode.set(null);
+    this.unitStatusLoading.set(false);
+    this.unitCurrentEnabled.set(true);
+    this.unitTargetEnabled.set(true);
     this.unitTransferFromId.set('');
     this.unitReassignSearch.set('');
     this.unitReassignError.set('');
@@ -1058,6 +1146,17 @@ export class UserListPageComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (mode === 'STATUS') {
+      this.unitTransferFromId.set('');
+      this.unitTargetIds.set([]);
+      this.selectedUnitDepartmentIds.set([]);
+      this.unitProofFile.set(null);
+      this.unitProofError.set('');
+      this.unitDepartmentError.set('');
+      this.unitTargetEnabled.set(this.unitCurrentEnabled());
+      return;
+    }
+
     if (mode === 'DEPARTMENTS') {
       const original = this.normalizeUnitIds(this.originalUnitIds());
       this.unitTransferFromId.set(original.length > 0 ? original[0] : '');
@@ -1073,8 +1172,23 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     this.syncSelectedDepartmentsForCurrentTargets();
   }
 
+  onUnitModeCardClick(mode: UnitReassignmentMode): void {
+    this.selectUnitReassignMode(mode);
+    if (this.unitWizardStep() === 1) {
+      this.goToUnitWizardStep(2);
+    }
+  }
+
   goToUnitWizardStep(step: 1 | 2 | 3 | 4): void {
+    if (this.unitReassignMode() === 'STATUS' && step === 3) {
+      return;
+    }
+
     if (step === this.unitWizardStep()) {
+      return;
+    }
+
+    if (step === 2 && !this.unitReassignMode()) {
       return;
     }
 
@@ -1087,7 +1201,9 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     }
 
     if (step === 4 && !this.canProceedFromUnitStep3()) {
-      this.unitDepartmentError.set(this.unitDepartmentSelectionMessage());
+      if (this.unitReassignMode() !== 'STATUS') {
+        this.unitDepartmentError.set(this.unitDepartmentSelectionMessage());
+      }
       return;
     }
 
@@ -1102,7 +1218,11 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     }
 
     if (currentStep === 2 && this.canProceedFromUnitStep2()) {
-      this.unitWizardStep.set(3);
+      if (this.unitReassignMode() === 'STATUS') {
+        this.unitWizardStep.set(4);
+      } else {
+        this.unitWizardStep.set(3);
+      }
       return;
     }
 
@@ -1128,7 +1248,7 @@ export class UserListPageComponent implements OnInit, OnDestroy {
       return;
     }
     if (currentStep === 4) {
-      this.unitWizardStep.set(3);
+      this.unitWizardStep.set(this.unitReassignMode() === 'STATUS' ? 2 : 3);
     }
   }
 
@@ -1163,7 +1283,13 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     this.unitResult.set(null);
   }
 
-  getUnitModeLabel(mode: UnitReassignmentMode): string {
+  getUnitModeLabel(mode: UnitReassignmentMode | null): string {
+    if (!mode) {
+      return 'Sin modo seleccionado';
+    }
+    if (mode === 'STATUS') {
+      return 'Activacion / desactivacion de usuario';
+    }
     if (mode === 'TRANSFER') {
       return 'Traslado de unidad';
     }
@@ -1226,6 +1352,52 @@ export class UserListPageComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const userId = member.id.trim();
+    const currentMode = this.unitReassignMode();
+
+    if (!currentMode) {
+      this.unitReassignError.set('Debes seleccionar un tipo de cambio.');
+      return;
+    }
+
+    if (currentMode === 'STATUS') {
+      const targetEnabled = this.unitTargetEnabled();
+      if (targetEnabled === this.unitCurrentEnabled()) {
+        this.unitReassignError.set('No hay cambios de estado para guardar.');
+        return;
+      }
+
+      this.unitReassignSaving.set(true);
+      this.unitReassignError.set('');
+
+      this.userService.updateUserEnabled(userId, targetEnabled)
+        .pipe(finalize(() => this.unitReassignSaving.set(false)))
+        .subscribe({
+          next: (updatedUser) => {
+            const updatedEnabled = !!updatedUser?.enabled;
+            this.unitCurrentEnabled.set(updatedEnabled);
+            this.unitTargetEnabled.set(updatedEnabled);
+            this.actionUserEnabled.set(updatedEnabled);
+            this.actionMessage.set('Estado de usuario actualizado para ' + userId + '.');
+            this.closeUnitReassignDrawer();
+
+            if (this.viewMode() === 'structure') {
+              this.loadMembersForSelectedGroup();
+            } else {
+              const term = this.globalSearchTerm().trim();
+              this.searchGlobalUsersByScope(term, this.globalPage());
+            }
+          },
+          error: (err) => {
+            console.error('Error guardando estado del usuario desde asistente:', err);
+            const backendMessage = (err?.error?.message || err?.error?.error || '').toString().trim();
+            this.unitReassignError.set(backendMessage || 'No se pudo actualizar el estado del usuario.');
+          }
+        });
+
+      return;
+    }
+
     const proofFile = this.unitProofFile();
     if (!proofFile) {
       this.unitProofError.set('Debes adjuntar un PDF justificante.');
@@ -1276,7 +1448,7 @@ export class UserListPageComponent implements OnInit, OnDestroy {
           departmentMembershipsApplied = true;
           return this.userService.uploadUnitReassignmentProof(member.id, {
             file: proofFile,
-            operationMode: this.unitReassignMode(),
+            operationMode: currentMode,
             fromUnitIds: unitDiff.original,
             targetUnitIds: unitDiff.target,
             finalUnitIds: unitDiff.final,
@@ -1289,7 +1461,7 @@ export class UserListPageComponent implements OnInit, OnDestroy {
         next: (proofResponse: UnitReassignmentProofResponse) => {
           const result: UnitReassignmentResult = {
             userId: member.id,
-            mode: this.unitReassignMode(),
+            mode: currentMode,
             previousUnits: this.mapUnitIdsToOptions(unitDiff.original),
             targetUnits: this.mapUnitIdsToOptions(unitDiff.target),
             finalUnits: this.mapUnitIdsToOptions(unitDiff.final),
@@ -1333,6 +1505,9 @@ export class UserListPageComponent implements OnInit, OnDestroy {
   }
 
   unitModeDescription(mode: UnitReassignmentMode): string {
+    if (mode === 'STATUS') {
+      return 'Activa o desactiva el acceso del usuario sin modificar unidades ni departamentos.';
+    }
     if (mode === 'TRANSFER') {
       return 'Traslada al usuario desde una unidad origen hacia una unidad destino.';
     }
@@ -1343,6 +1518,9 @@ export class UserListPageComponent implements OnInit, OnDestroy {
   }
 
   hasUnitChanges(): boolean {
+    if (this.unitReassignMode() === 'STATUS') {
+      return this.unitCurrentEnabled() !== this.unitTargetEnabled();
+    }
     const unitDiff = this.unitDiff();
     const departmentDiff = this.unitDepartmentDiff();
     return unitDiff.toAdd.length > 0 ||
@@ -1471,6 +1649,28 @@ export class UserListPageComponent implements OnInit, OnDestroy {
     const allowedUnits = availableUnits.length > 0 ? new Set(availableUnits.map(unit => unit.id)) : null;
     const original = this.normalizeUnitIds(this.originalUnitIds().filter(unitId => !allowedUnits || allowedUnits.has(unitId)));
     const rawTarget = this.normalizeUnitIds(this.unitTargetIds().filter(unitId => !allowedUnits || allowedUnits.has(unitId)));
+
+    if (this.unitReassignMode() === 'STATUS') {
+      return {
+        original,
+        target: [],
+        final: original,
+        toAdd: [],
+        toRemove: [],
+        transferFrom: null
+      };
+    }
+
+    if (!this.unitReassignMode()) {
+      return {
+        original,
+        target: [],
+        final: original,
+        toAdd: [],
+        toRemove: [],
+        transferFrom: null
+      };
+    }
 
     let target = rawTarget;
     let final = rawTarget;
@@ -2181,6 +2381,7 @@ export class UserListPageComponent implements OnInit, OnDestroy {
 
         this.actionUserFullName.set(fullName || userId);
         this.actionUserEmail.set(email);
+        this.actionUserEnabled.set(!!exactUser?.enabled);
         this.actionUserRole.set(hasAnyAdmin ? 'Administrador de sitio en alguna unidad' : 'Usuario de sitio');
         this.actionUserUnits.set(cards);
         this.actionDetailsLoading.set(false);

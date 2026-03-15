@@ -1,7 +1,7 @@
 <section class="audit-page">
   <header class="page-header">
-    <h1>Auditoría de reasignaciones</h1>
-    <p>Consulta de justificantes PDF almacenados en Alfresco.</p>
+    <h1>Auditoría de usuarios</h1>
+    <p>Selecciona una sección de consulta.</p>
   </header>
 
   <div class="alert error" *ngIf="!isGlobalAdmin()">
@@ -9,109 +9,217 @@
   </div>
 
   <ng-container *ngIf="isGlobalAdmin()">
-    <section class="filter-card">
-      <form class="filter-form" (ngSubmit)="onFilterSubmit()">
-        <label for="audit-user-filter">Filtros de auditoría</label>
-        <div class="filter-row">
-          <input
-            id="audit-user-filter"
-            type="text"
-            [ngModel]="filterUserId()"
-            (ngModelChange)="filterUserId.set($event)"
-            name="filterUserId"
-            placeholder="Ej: L34168R" />
-          <select
-            [ngModel]="filterMode()"
-            (ngModelChange)="filterMode.set($event)"
-            name="filterMode"
-            aria-label="Filtrar por modo">
-            <option value="">Todos los modos</option>
-            <option value="TRANSFER">Traslado</option>
-            <option value="ADD">Alta en unidad</option>
-            <option value="DEPARTMENTS">Reasignación de departamentos</option>
-          </select>
-          <input
-            type="date"
-            [ngModel]="filterFromDate()"
-            (ngModelChange)="filterFromDate.set($event)"
-            name="filterFromDate"
-            aria-label="Fecha desde" />
-          <input
-            type="date"
-            [ngModel]="filterToDate()"
-            (ngModelChange)="filterToDate.set($event)"
-            name="filterToDate"
-            aria-label="Fecha hasta" />
-          <select
-            [ngModel]="sortOrder()"
-            (ngModelChange)="sortOrder.set($event)"
-            name="sortOrder"
-            aria-label="Orden">
-            <option value="newest">Más recientes</option>
-            <option value="oldest">Más antiguas</option>
-            <option value="user-asc">Usuario A-Z</option>
-            <option value="user-desc">Usuario Z-A</option>
-          </select>
-          <button type="submit" class="btn-primary" [disabled]="loading()">Buscar</button>
-          <button type="button" class="btn-secondary" (click)="resetFilter()" [disabled]="loading()">Limpiar</button>
+    <section class="sections-grid">
+      <button
+        type="button"
+        class="section-card"
+        *ngFor="let section of sectionCards"
+        [class.active]="getIsSectionActive(section.id)"
+        (click)="selectSection(section.id)">
+        <div class="section-head">
+          <h2>{{ section.title }}</h2>
+          <span class="status" [class.planned]="!section.available">
+            {{ section.available ? 'Disponible' : 'Próximamente' }}
+          </span>
         </div>
-      </form>
+        <p>{{ section.description }}</p>
+      </button>
     </section>
 
-    <div class="alert error" *ngIf="error()">{{ error() }}</div>
-    <div class="loading" *ngIf="loading()">Cargando auditorías...</div>
+    <ng-container [ngSwitch]="activeSection()">
+      <ng-container *ngSwitchCase="'reassignments'">
+        <section class="filter-card">
+          <form class="filter-form" (ngSubmit)="onFilterSubmit()">
+            <label for="audit-user-filter">Filtros de auditoría</label>
+            <div class="filter-row">
+              <input
+                id="audit-user-filter"
+                type="text"
+                [ngModel]="filterUserId()"
+                (ngModelChange)="filterUserId.set($event)"
+                name="filterUserId"
+                placeholder="Ej: L34168R" />
+              <select
+                [ngModel]="filterMode()"
+                (ngModelChange)="filterMode.set($event)"
+                name="filterMode"
+                aria-label="Filtrar por modo">
+                <option value="">Todos los modos</option>
+                <option value="TRANSFER">Traslado</option>
+                <option value="ADD">Alta en unidad</option>
+                <option value="DEPARTMENTS">Reasignación de departamentos</option>
+              </select>
+              <input
+                type="date"
+                [ngModel]="filterFromDate()"
+                (ngModelChange)="filterFromDate.set($event)"
+                name="filterFromDate"
+                aria-label="Fecha desde" />
+              <input
+                type="date"
+                [ngModel]="filterToDate()"
+                (ngModelChange)="filterToDate.set($event)"
+                name="filterToDate"
+                aria-label="Fecha hasta" />
+              <select
+                [ngModel]="sortOrder()"
+                (ngModelChange)="sortOrder.set($event)"
+                name="sortOrder"
+                aria-label="Orden">
+                <option value="newest">Más recientes</option>
+                <option value="oldest">Más antiguas</option>
+                <option value="user-asc">Usuario A-Z</option>
+                <option value="user-desc">Usuario Z-A</option>
+              </select>
+              <button type="submit" class="btn-primary" [disabled]="loading() || !canSearchReassignments()">Buscar</button>
+              <button type="button" class="btn-secondary" (click)="resetFilter()" [disabled]="loading()">Limpiar</button>
+            </div>
+          </form>
+        </section>
 
-    <section class="table-card" *ngIf="!loading()">
-      <div class="table-meta">
-        <span>Total registros: <strong>{{ totalItems() }}</strong></span>
-        <span>Página: <strong>{{ page() }}</strong></span>
-      </div>
+        <div class="empty" *ngIf="!reassignmentHasSearched()">Aplica filtros y pulsa Buscar para consultar reasignaciones.</div>
 
-      <table class="audit-table" *ngIf="audits().length > 0; else noAudits">
-        <thead>
-          <tr>
-            <th>Usuario</th>
-            <th>Fecha</th>
-            <th>Modo</th>
-            <th>Detalle de la operación</th>
-            <th>Archivo</th>
-            <th>Carpeta</th>
-            <th>Documento</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let item of audits()">
-            <td>{{ item.userId }}</td>
-            <td>{{ getFormattedDate(item.createdAt) }}</td>
-            <td>{{ getModeLabel(item.operationMode) }}</td>
-            <td class="detail-cell">{{ getAuditSummary(item) }}</td>
-            <td>{{ item.fileName }}</td>
-            <td>{{ item.folder }}</td>
-            <td class="action-cell">
-              <button
-                type="button"
-                class="pdf-icon-btn"
-                (click)="openAudit(item)"
-                [attr.aria-label]="'Abrir PDF: ' + item.fileName"
-                title="Abrir PDF">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
-                  <path d="M14 2v6h6"></path>
-                </svg>
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+        <div class="alert error" *ngIf="error()">{{ error() }}</div>
+        <div class="loading" *ngIf="loading()">Cargando auditorías...</div>
 
-      <ng-template #noAudits>
-        <div class="empty">No hay auditorías para los filtros aplicados.</div>
-      </ng-template>
+        <section class="table-card" *ngIf="!loading() && reassignmentHasSearched()">
+          <div class="table-meta">
+            <span>Total registros: <strong>{{ totalItems() }}</strong></span>
+            <span>Página: <strong>{{ page() }}</strong></span>
+          </div>
 
-      <div class="pager">
-        <button type="button" class="btn-secondary" (click)="goPrevious()" [disabled]="!canGoPrevious()">Anterior</button>
-        <button type="button" class="btn-secondary" (click)="goNext()" [disabled]="!canGoNext()">Siguiente</button>
-      </div>
-    </section>
+          <table class="audit-table" *ngIf="audits().length > 0; else noAudits">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Fecha</th>
+                <th>Modo</th>
+                <th>Detalle de la operación</th>
+                <th>Archivo</th>
+                <th>Carpeta</th>
+                <th>Documento</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of audits()">
+                <td>{{ item.userId }}</td>
+                <td>{{ getFormattedDate(item.createdAt) }}</td>
+                <td>{{ getModeLabel(item.operationMode) }}</td>
+                <td class="detail-cell">{{ getAuditSummary(item) }}</td>
+                <td>{{ item.fileName }}</td>
+                <td>{{ item.folder }}</td>
+                <td class="action-cell">
+                  <button
+                    type="button"
+                    class="pdf-icon-btn"
+                    (click)="openAudit(item)"
+                    [attr.aria-label]="'Abrir PDF: ' + item.fileName"
+                    title="Abrir PDF">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                      <path d="M14 2v6h6"></path>
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <ng-template #noAudits>
+            <div class="empty">No hay auditorías para los filtros aplicados.</div>
+          </ng-template>
+
+          <div class="pager">
+            <button type="button" class="btn-secondary" (click)="goPrevious()" [disabled]="!canGoPrevious()">Anterior</button>
+            <button type="button" class="btn-secondary" (click)="goNext()" [disabled]="!canGoNext()">Siguiente</button>
+          </div>
+        </section>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'user-origin'">
+        <section class="filter-card">
+          <form class="filter-form" (ngSubmit)="onUserOriginFilterSubmit()">
+            <label for="origin-user-filter">Filtros de fecha/creador</label>
+            <div class="filter-row origin-filter-row">
+              <input
+                id="origin-user-filter"
+                type="text"
+                [ngModel]="originSearchTerm()"
+                (ngModelChange)="originSearchTerm.set($event)"
+                name="originSearchTerm"
+                placeholder="Buscar por TIP, nombre o email" />
+              <select
+                [ngModel]="originStatus()"
+                (ngModelChange)="originStatus.set($event)"
+                name="originStatus"
+                aria-label="Filtrar por estado">
+                <option value="all">Todos los estados</option>
+                <option value="active">Activos</option>
+                <option value="inactive">Inactivos</option>
+              </select>
+              <button type="submit" class="btn-primary" [disabled]="originLoading() || !canSearchUserOrigin()">Buscar</button>
+              <button type="button" class="btn-secondary" (click)="resetUserOriginFilter()" [disabled]="originLoading()">Limpiar</button>
+            </div>
+          </form>
+        </section>
+
+        <div class="empty" *ngIf="!originHasSearched()">Introduce TIP, nombre o email y pulsa Buscar para consultar fecha y creador.</div>
+
+        <div class="alert error" *ngIf="originError()">{{ originError() }}</div>
+        <div class="loading" *ngIf="originLoading()">Cargando fecha/creador de usuarios...</div>
+
+        <section class="table-card" *ngIf="!originLoading() && originHasSearched()">
+          <div class="table-meta">
+            <span>Total registros: <strong>{{ originTotalItems() }}</strong></span>
+            <span>Página: <strong>{{ originPage() }}</strong></span>
+          </div>
+
+          <table class="audit-table" *ngIf="originItems().length > 0; else noOriginAudits">
+            <thead>
+              <tr>
+                <th>TIP</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Estado</th>
+                <th>Fecha alta</th>
+                <th>Creador</th>
+                <th>Fuente</th>
+                <th>Última actividad</th>
+                <th>Reasignaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of originItems()">
+                <td>{{ item.userId }}</td>
+                <td>{{ item.fullName || '—' }}</td>
+                <td>{{ item.email || '—' }}</td>
+                <td>{{ item.enabled ? 'Activo' : 'Inactivo' }}</td>
+                <td>{{ getFormattedDate(item.createdAt) }}</td>
+                <td>{{ item.createdBy || '—' }}</td>
+                <td>{{ getUserOriginSourceLabel(item.source) }}</td>
+                <td>{{ getFormattedDate(item.lastActivityAt) }}</td>
+                <td>{{ item.reassignmentCount || 0 }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <ng-template #noOriginAudits>
+            <div class="empty">No hay resultados de fecha/creador para los filtros aplicados.</div>
+          </ng-template>
+
+          <div class="pager">
+            <button type="button" class="btn-secondary" (click)="goPreviousOrigin()" [disabled]="!canGoPreviousOrigin()">Anterior</button>
+            <button type="button" class="btn-secondary" (click)="goNextOrigin()" [disabled]="!canGoNextOrigin()">Siguiente</button>
+          </div>
+        </section>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'user-activity'">
+        <section class="placeholder-card">
+          <h3>Actividad de usuario</h3>
+          <p>Esta sección queda preparada para incorporar eventos y acciones relevantes del usuario.</p>
+        </section>
+      </ng-container>
+    </ng-container>
   </ng-container>
 </section>

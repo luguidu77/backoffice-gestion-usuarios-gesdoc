@@ -30,6 +30,26 @@
 
     <!-- Contenido de las pestañas -->
     <div class="tab-content">
+        <section class="unit-quick-panel">
+            <article class="quick-card admin-card">
+                <h4>Administrador del sitio</h4>
+                <p class="muted">Haz clic en un administrador para abrir su ficha de usuario.</p>
+                <div *ngIf="loadingMembers()" class="muted">Cargando miembros...</div>
+                <div *ngIf="!loadingMembers() && unitAdminMembers().length > 0" class="admin-chips">
+                    <button
+                        type="button"
+                        class="admin-chip"
+                        *ngFor="let admin of unitAdminMembers()"
+                        (click)="openUserDetailsDrawer(admin)">
+                        <span class="admin-tip">{{ admin.id }}</span>
+                        <span class="admin-name">{{ getMemberDisplayName(admin) }}</span>
+                    </button>
+                </div>
+                <p class="muted" *ngIf="!loadingMembers() && unitAdminMembers().length === 0">No hay administradores detectados.</p>
+                <button type="button" class="btn-retry" (click)="focusMembersTab()">Ver miembros</button>
+            </article>
+        </section>
+
         <!-- Pestaña: Resumen -->
         <div *ngIf="activeTab() === 'resumen'" class="tab-pane">
             <div class="metadata-card">
@@ -50,6 +70,37 @@
                     <h3>Miembros y Roles</h3>
                 </div>
 
+                <div class="members-toolbar" *ngIf="!loadingMembers() && !membersError() && members().length > 0">
+                    <input
+                        type="text"
+                        [ngModel]="membersSearchTerm()"
+                        (ngModelChange)="onMembersSearchChange($event)"
+                        placeholder="Buscar por TIP, nombre o email"
+                        aria-label="Buscar miembros" />
+
+                    <select
+                        [ngModel]="membersStatusFilter()"
+                        (ngModelChange)="onMembersStatusFilterChange($event)"
+                        aria-label="Filtrar por estado">
+                        <option value="all">Todos los estados</option>
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos</option>
+                    </select>
+
+                    <select
+                        [ngModel]="membersRoleFilter()"
+                        (ngModelChange)="onMembersRoleFilterChange($event)"
+                        aria-label="Filtrar por rol">
+                        <option value="all">Todos los roles</option>
+                        <option value="manager">Administrador de Unidad</option>
+                        <option value="contributor">Colaborador</option>
+                        <option value="consumer">Lector</option>
+                        <option value="generic">Miembro Genérico</option>
+                    </select>
+
+                    <button class="btn-retry" type="button" (click)="clearMembersFilters()">Limpiar filtros</button>
+                </div>
+
                 <div *ngIf="loadingMembers()" class="loading-state">
                     <div class="spinner"></div>
                     <p>Obteniendo miembros de la unidad...</p>
@@ -61,7 +112,11 @@
                 </div>
 
                 <div class="table-container" *ngIf="!loadingMembers() && !membersError()">
-                    <table class="members-table" *ngIf="members().length > 0">
+                    <div class="table-pager" *ngIf="members().length > 0">
+                        <span>Total miembros: {{ members().length }} · Filtrados: {{ filteredMembers().length }}</span>
+                    </div>
+
+                    <table class="members-table" *ngIf="filteredMembers().length > 0">
                         <thead>
                             <tr>
                                 <th>Usuario</th>
@@ -79,7 +134,7 @@
                                         member.lastName.charAt(0) : '' }}</div>
                                     <span class="user-id">{{ member.id }}</span>
                                 </td>
-                                <td>{{ member.firstName }} {{ member.lastName }}</td>
+                                <td>{{ getMemberDisplayName(member) }}</td>
                                 <td class="email-cell">{{ member.email }}</td>
                                 <td>
                                     <span class="status-badge" [class.active]="member.enabled"
@@ -88,7 +143,13 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="role-badge generic">Miembro Genérico</span>
+                                    <span class="role-badge"
+                                        [class.manager]="getMemberRoleLabel(member) === 'Administrador de Unidad'"
+                                        [class.contributor]="getMemberRoleLabel(member) === 'Colaborador'"
+                                        [class.consumer]="getMemberRoleLabel(member) === 'Lector'"
+                                        [class.generic]="getMemberRoleLabel(member) === 'Miembro Genérico'">
+                                        {{ getMemberRoleLabel(member) }}
+                                    </span>
                                 </td>
                                 <td class="actions-cell">
                                     <button class="btn-icon" title="Ver detalle" (click)="$event.stopPropagation(); openUserDetailsDrawer(member)">⚙️</button>
@@ -97,7 +158,7 @@
                         </tbody>
                     </table>
 
-                    <div class="table-pager" *ngIf="members().length > 0 && membersTotalPages() > 1">
+                    <div class="table-pager" *ngIf="filteredMembers().length > 0 && membersTotalPages() > 1">
                         <span>Página {{ membersCurrentPage() }} de {{ membersTotalPages() }}</span>
                         <div class="pager-actions">
                             <button class="btn-retry" (click)="previousMembersPage()" [disabled]="membersCurrentPage() === 1">Anterior</button>
@@ -109,6 +170,12 @@
                         <div class="empty-icon">👥</div>
                         <h4>Unidad sin miembros</h4>
                         <p>No se encontraron usuarios asignados directamente a esta unidad.</p>
+                    </div>
+
+                    <div *ngIf="members().length > 0 && filteredMembers().length === 0" class="empty-state compact-empty">
+                        <div class="empty-icon">🔎</div>
+                        <h4>Sin resultados</h4>
+                        <p>No hay usuarios que coincidan con los filtros aplicados.</p>
                     </div>
                 </div>
             </div>
